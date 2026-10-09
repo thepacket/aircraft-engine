@@ -158,3 +158,13 @@ table.stats th:first-child, table.stats td:first-child { text-align: left; }
 #controls .momentary small { font-weight: 400; color: var(--muted); letter-spacing: 0; }
 .env-grid { grid-template-columns: 1fr 1fr 1fr 1fr; }
 #n1-hold-row.hidden { display: none; }
+
+/* ---- scrollbars follow the flight-deck theme ---- */
+* { scrollbar-width: thin; scrollbar-color: #2d3b4b var(--panel-2); }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: var(--panel-2); border-radius: 5px; }
+*::-webkit-scrollbar-thumb { background: #2d3b4b; border-radius: 5px; border: 2px solid var(--panel-2); }
+*::-webkit-scrollbar-thumb:hover { background: #3a4b5f; }
+*::-webkit-scrollbar-corner { background: var(--panel-2); }
+textarea, .help, .faults, .mapping, #center { scrollbar-color: #2d3b4b #0a0e13; }
+textarea::-webkit-scrollbar-track, .help::-webkit-scrollbar-track, .faults::-webkit-scrollbar-track, .mapping::-webkit-scrollbar-track, #center::-webkit-scrollbar-track { background: #0a0e13; }
