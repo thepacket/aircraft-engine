@@ -11,12 +11,17 @@
 //!   spool dynamics, sensors and limit monitoring
 //! - [`logger`]: fixed-rate CSV data logger
 
+pub mod any;
 pub mod atmosphere;
 pub mod cycle;
 pub mod engine;
 pub mod logger;
+pub mod piston;
+pub mod propeller;
 pub mod spec;
+pub mod turboprop;
 
+pub use any::{AnyEngine, AnySpec};
 pub use engine::{Controls, Engine, EngineState, Environment, Faults, Mode};
 pub use spec::EngineSpec;
 

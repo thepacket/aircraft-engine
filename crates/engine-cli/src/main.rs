@@ -12,13 +12,19 @@
 //!   at 150 end
 
 use engine_core::cycle::size_design_point;
-use engine_core::{Engine, EngineSpec};
+use engine_core::{AnyEngine, AnySpec, EngineSpec};
 use std::io::Write;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(|s| s.as_str()) {
-        Some("spec") => println!("{}", EngineSpec::cfm56_7b26().to_json()),
+        Some("spec") => {
+            let kind = args.get(1).map(|s| s.as_str()).unwrap_or("turbofan");
+            match AnySpec::default_for(kind) {
+                Some(s) => println!("{}", s.to_json()),
+                None => { eprintln!("unknown engine kind {kind} (turbofan | piston | turboprop)"); std::process::exit(2) }
+            }
+        }
         Some("design") => {
             let d = size_design_point(&EngineSpec::cfm56_7b26());
             println!("{}", serde_json::to_string_pretty(&d).unwrap());
@@ -26,7 +32,7 @@ fn main() {
         Some("run") => run(&args[1..]),
         Some("point") => point(&args[1..]),
         _ => {
-            eprintln!("usage: engine-cli spec | design | run <script> [--rate HZ] [--spec spec.json]");
+            eprintln!("usage: engine-cli spec [kind] | design | point ... | run <script> [--engine kind] [--rate HZ] [--spec spec.json]");
             std::process::exit(2);
         }
     }
@@ -60,22 +66,22 @@ fn point(args: &[String]) {
 fn run(args: &[String]) {
     let script_path = args.first().expect("script path");
     let mut rate = 10.0;
-    let mut spec = EngineSpec::cfm56_7b26();
+    let mut spec: Option<AnySpec> = None;
+    let mut kind = "turbofan".to_string();
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--rate" => {
-                rate = args[i + 1].parse().expect("rate");
-                i += 2;
-            }
+            "--rate" => { rate = args[i + 1].parse().expect("rate"); i += 2; }
+            "--engine" => { kind = args[i + 1].clone(); i += 2; }
             "--spec" => {
                 let text = std::fs::read_to_string(&args[i + 1]).expect("read spec");
-                spec = EngineSpec::from_json(&text).expect("parse spec");
+                spec = Some(AnySpec::from_json(&text).expect("parse spec"));
                 i += 2;
             }
             other => panic!("unknown argument {other}"),
         }
     }
+    let spec = spec.unwrap_or_else(|| AnySpec::default_for(&kind).unwrap_or_else(|| panic!("unknown engine kind {kind}")));
     let script = std::fs::read_to_string(script_path).expect("read script");
     let mut events: Vec<(f64, String, Option<String>)> = Vec::new();
     for line in script.lines() {
@@ -85,7 +91,8 @@ fn run(args: &[String]) {
         }
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() < 3 || parts[0] != "at" {
-            eprintln!("bad line: {line}");
+            if parts.first() == Some(&"when") { eprintln!("note: conditional lines are only supported in the IDE: {line}"); }
+            else { eprintln!("bad line: {line}"); }
             continue;
         }
         let t: f64 = parts[1].parse().expect("time");
@@ -95,67 +102,66 @@ fn run(args: &[String]) {
     events.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     let end = events.iter().find(|e| e.1 == "end").map(|e| e.0).unwrap_or_else(|| events.last().map(|e| e.0 + 10.0).unwrap_or(60.0));
 
-    let mut e = Engine::new(spec);
-    e.logger.set_rate(rate);
-    e.logger.start(0.0);
+    let mut e = AnyEngine::new(spec);
+    e.logger().set_rate(rate);
+    e.logger().start(0.0);
     let dt = 0.02;
     let mut next = 0;
+    let mut env = [0.0, 0.0, 0.0, 0.4];
     while e.time() < end {
         while next < events.len() && events[next].0 <= e.time() + 1e-9 {
             let (_, cmd, val) = &events[next];
-            apply(&mut e, cmd, val.as_deref());
+            apply(&mut e, cmd, val.as_deref(), &mut env);
             next += 1;
         }
         e.step(dt);
     }
-    let csv = e.logger.to_csv();
+    let csv = e.logger_ref().to_csv();
     std::io::stdout().write_all(csv.as_bytes()).unwrap();
 }
 
-fn apply(e: &mut Engine, cmd: &str, val: Option<&str>) {
-    let on = matches!(val, Some("on") | Some("1") | Some("true"));
-    let num = || val.and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
-    match cmd {
-        "starter" => e.controls.starter = on,
-        "fuel" => e.controls.fuel_lever = on,
-        "tla" => e.controls.tla = num().clamp(0.0, 1.0),
-        "alt" => e.environment.altitude_m = num(),
-        "mach" => e.environment.mach = num(),
-        "isa" => e.environment.delta_isa_k = num(),
-        "running" => e.set_running(num()),
-        "n1" => e.controls.n1_demand_pct = if val == Some("off") { -1.0 } else { num() },
-        "antiice" => e.controls.anti_ice = on,
-        "pack" => e.controls.pack_bleed = on,
-        "reverser" => e.controls.reverser = on,
+fn apply(e: &mut AnyEngine, cmd: &str, val: Option<&str>, env: &mut [f64; 4]) {
+    let on = matches!(val, Some("on") | Some("1") | Some("true") | Some("run"));
+    let num = || val.and_then(|v| v.split_whitespace().next()).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+    let b = |x: bool| if x { 1.0 } else { 0.0 };
+    let r = match cmd {
+        "starter" => e.set_control("starter", b(on)),
+        "fuel" => match e.kind() {
+            "turbofan" => e.set_control("fuel_lever", b(on)),
+            "turboprop" => e.set_control("condition_lever", b(on)),
+            _ => e.set_control("mixture", b(on)),
+        },
+        "tla" | "throttle" | "power" => e.set_control("tla", num()),
+        "n1" => e.set_control("n1_demand", if val == Some("off") { -1.0 } else { num() }),
+        "antiice" => e.set_control("anti_ice", b(on)),
+        "pack" => e.set_control("pack_bleed", b(on)),
+        "reverser" => e.set_control("reverser", b(on)),
+        "ctl" => {
+            let mut it = val.unwrap_or("").split_whitespace();
+            let name = it.next().unwrap_or("");
+            let v = it.next().unwrap_or("1");
+            let x = match v { "on" | "true" | "run" => 1.0, "off" | "false" | "cutoff" => 0.0, _ => v.parse().unwrap_or(0.0) };
+            e.set_control(name, x)
+        }
+        "alt" => { env[0] = num(); e.set_environment(env[0], env[1], env[2], env[3]); Ok(()) }
+        "mach" => { env[1] = num(); e.set_environment(env[0], env[1], env[2], env[3]); Ok(()) }
+        "isa" => { env[2] = num(); e.set_environment(env[0], env[1], env[2], env[3]); Ok(()) }
+        "humidity" => { env[3] = num(); e.set_environment(env[0], env[1], env[2], env[3]); Ok(()) }
+        "running" => { e.set_running(num()); Ok(()) }
         "fault" => {
             // fault <name> [value]   e.g. "fault ignition_fail on", "fault start_fuel_factor 1.6"
             let mut it = val.unwrap_or("").split_whitespace();
-            let name = it.next().unwrap_or("");
+            let mut name = it.next().unwrap_or("").to_string();
             let v = it.next().unwrap_or("on");
-            let on = matches!(v, "on" | "1" | "true");
-            let x: f64 = v.parse().unwrap_or(0.0);
-            let f = &mut e.faults;
-            match name {
-                "starter_inop" => f.starter_inop = on,
-                "starter_weak" => f.starter_weak = on,
-                "starter_early_cutout" => f.starter_early_cutout = on,
-                "ignition_fail" => f.ignition_fail = on,
-                "start_fuel_factor" => f.start_fuel_factor = x,
-                "fuel_pump_fail" => f.fuel_pump_fail = on,
-                "oil_leak" | "oil_leak_qt_per_min" => f.oil_leak_qt_per_min = x,
-                "fire" => f.fire = on,
-                "n1_governor_fail" => f.n1_governor_fail = on,
-                "compressor_damage" | "compressor_damage_pct" => f.compressor_damage_pct = x,
-                "fod" => f.fod = on,
-                "egt_probe_fail" => f.egt_probe_fail = on,
-                "reverser_stuck" => f.reverser_stuck = on,
-                "surge" | "trigger_surge" => f.trigger_surge = true,
-                "flameout" | "trigger_flameout" => f.trigger_flameout = true,
-                "fire_bottle" => f.fire_bottle = true,
-                other => eprintln!("unknown fault {other}"),
+            let json_v = match v { "on" | "1" | "true" => "true".to_string(), "off" | "0" | "false" => "false".to_string(), _ => v.to_string() };
+            for (a, bname) in [("surge", "trigger_surge"), ("flameout", "trigger_flameout"), ("oil_leak", "oil_leak_qt_per_min"), ("compressor_damage", "compressor_damage_pct")] {
+                if name == a { name = bname.to_string(); }
             }
+            e.set_faults_json(&format!("{{\"{name}\": {json_v}}}"))
         }
-        "end" => {}
-        other => eprintln!("unknown command {other}"),
-    }
+        "bottle" => e.set_faults_json("{\"fire_bottle\": true}"),
+        "end" | "log" | "note" | "speed" | "engine" => Ok(()),
+        other => Err(format!("unknown command {other}")),
+    };
+    if let Err(m) = r { eprintln!("{m}"); }
 }

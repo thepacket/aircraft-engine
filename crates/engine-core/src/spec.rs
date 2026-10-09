@@ -15,7 +15,6 @@ pub struct EngineSpec {
     pub name: String,
     pub manufacturer: String,
     pub application: String,
-    pub kind: EngineKind,
     pub rating: Rating,
     pub geometry: Geometry,
     pub design_point: DesignPoint,
@@ -86,12 +85,6 @@ pub struct ReverserSpec {
     pub efficiency: f64,
     /// Maximum N1 in reverse (%)
     pub max_n1_pct: f64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EngineKind {
-    Turbofan,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -261,7 +254,6 @@ impl EngineSpec {
             name: "CFM56-7B26".into(),
             manufacturer: "CFM International".into(),
             application: "Boeing 737-800 / 737-900".into(),
-            kind: EngineKind::Turbofan,
             rating: Rating {
                 takeoff_thrust_n: 116_988.0,        // 26,300 lbf
                 max_continuous_thrust_n: 105_867.0, // 23,800 lbf
