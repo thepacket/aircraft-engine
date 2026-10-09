@@ -2,6 +2,7 @@
   "name": "aircraft-engine-ide",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Browser-based aircraft engine simulator IDE. The server only delivers static files; the simulation runs in the browser (Rust compiled to WebAssembly).",
   "scripts": {

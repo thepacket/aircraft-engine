@@ -1,5 +1,8 @@
 # Aircraft Engine Sim
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Live](https://img.shields.io/badge/live-aircraftengine.fly.dev-4fc3f7.svg)](https://aircraftengine.fly.dev)
+
 ![Aircraft Engine Sim running the CFM56-7B26: controls, 737NG-style engine indications, performance readouts, cycle stations and strip charts](docs/aircraft-engine.png)
 
 An educational IDE for aircraft engine simulation. The simulators are
@@ -8,8 +11,16 @@ engines, with virtual cockpit instrumentation and a data logger. Everything
 runs inside the browser: the web server only delivers static files, and the
 simulation core is Rust compiled to WebAssembly.
 
-Three engine families, each validated against its published data. Live:
-https://aircraftengine.fly.dev
+Three engine families, each validated against its published data. Try it at
+https://aircraftengine.fly.dev, no install needed.
+
+> **Educational use only.** This is a teaching tool. It is not a certified
+> flight training device, not a substitute for the aircraft flight manual or
+> the engine manufacturer's documentation, and must not be used for
+> operational, maintenance or airworthiness decisions. The models reproduce
+> published figures; the proprietary parts of the real engines (component
+> maps, control laws) are replaced by calibrated approximations described in
+> [docs/MODEL.md](docs/MODEL.md).
 
 | Engine | Type | Aircraft | Rating |
 |---|---|---|---|
@@ -193,3 +204,24 @@ proprietary. They are replaced by:
 
 The whole model is in the JSON spec shown in the IDE, so every assumption can
 be inspected and changed.
+
+## Sources
+
+The published figures behind the calibrations come from the FAA type
+certificate data sheets (E00055EN for the CFM56-7B, E-286 for the O-360,
+E4EA for the PT6A), the Boeing 737NG FCOM limitations and engine indication
+chapters, the Piper PA-28-181 and Cessna 208B pilot's operating handbooks,
+the Lycoming O-360 operator's manual, manufacturer-published performance data
+and FAR Part 33. No proprietary data is included. Trademarks (CFM, Lycoming,
+Pratt & Whitney Canada, Boeing, Piper, Cessna) belong to their owners and are
+used only to identify the engines and aircraft modelled.
+
+## Contributing
+
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Questions, teaching ideas and show-and-tell go in GitHub Discussions. Real
+flight logs you are allowed to share are the most valuable contribution.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Copyright (c) 2026 Andre Paquette.
