@@ -1,0 +1,7 @@
+# Normal shutdown from idle: fuel lever to CUTOFF. Watch N2 spool down
+# (~18 s time constant), N1 coasting for minutes, EGT cooling.
+at 0    running 0
+at 0    log on
+at 10   note Fuel lever to CUTOFF
+at 10   fuel off
+at 150  end

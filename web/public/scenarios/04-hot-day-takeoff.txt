@@ -1,0 +1,8 @@
+# Takeoff at ISA+30 (45 C at sea level): the FADEC limits N1 beyond the
+# flat-rating temperature (ISA+15) to protect EGT. Compare with scenario 02.
+at 0    isa 30
+at 0    running 0
+at 0    log on
+at 5    tla 1.0
+at 30   tla 0
+at 45   end

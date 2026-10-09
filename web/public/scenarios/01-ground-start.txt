@@ -1,0 +1,11 @@
+# Normal ground start, CFM56-7B26, sea level ISA
+# Watch: N2 motoring to ~25%, light-off ~2 s after fuel on, EGT peak < 725 C,
+# starter cutout at 56% N2, idle at N1 21% / N2 60%.
+at 0    note Ground start: starter on
+at 0    log on
+at 0    starter on
+at 18   note Fuel lever to RUN at ~25% N2
+at 18   fuel on
+at 75   starter off
+at 90   note Stabilised at ground idle
+at 100  end

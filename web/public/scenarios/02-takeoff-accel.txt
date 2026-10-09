@@ -1,0 +1,9 @@
+# Idle to takeoff thrust: FAR 33.73 requires 95% rated thrust within 5 s
+# from flight idle. Watch the EGT overshoot and the fuel flow spike.
+at 0    running 0
+at 0    log on
+at 5    note Thrust lever to TO/GA
+at 5    tla 1.0
+at 30   note Back to idle (decel schedule)
+at 30   tla 0
+at 50   end

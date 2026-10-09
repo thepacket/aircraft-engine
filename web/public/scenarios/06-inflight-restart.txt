@@ -1,0 +1,9 @@
+# In-flight shutdown and windmill restart at 15,000 ft, M0.5.
+at 0    alt 4572
+at 0    mach 0.5
+at 0    running 0.5
+at 0    log on
+at 10   fuel off
+at 60   note Windmilling: N2 should be above 20% for a windmill start
+at 60   fuel on
+at 150  end

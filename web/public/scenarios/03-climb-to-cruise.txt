@@ -1,0 +1,16 @@
+# Takeoff, then step the environment up to cruise (FL350, M0.78).
+# Watch corrected N1 vs actual N1, thrust lapse with altitude and TSFC.
+at 0    running 1.0
+at 0    log on
+at 10   alt 1500
+at 10   mach 0.35
+at 10   tla 0.8
+at 20   alt 5000
+at 20   mach 0.55
+at 30   alt 8000
+at 30   mach 0.70
+at 40   alt 10668
+at 40   mach 0.78
+at 45   note Cruise: set N1 ~ 85%
+at 45   tla 0.62
+at 90   end

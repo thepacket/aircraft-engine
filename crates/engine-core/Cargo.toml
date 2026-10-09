@@ -1,0 +1,10 @@
+[package]
+name = "engine-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Physics-based aircraft engine simulation core (turbofan cycle, spool dynamics, instrumentation, logging)"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
