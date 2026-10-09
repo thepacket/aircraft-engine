@@ -1,7 +1,7 @@
 //! WebAssembly bindings. The whole simulation runs inside the browser; the
 //! web server only delivers this module and the static UI.
 
-use engine_core::{Engine, EngineSpec};
+use engine_core::{Engine, EngineSpec, Faults};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -60,6 +60,44 @@ impl Simulator {
 
     pub fn set_starter(&mut self, on: bool) {
         self.engine.controls.starter = on;
+    }
+
+    pub fn set_anti_ice(&mut self, on: bool) {
+        self.engine.controls.anti_ice = on;
+    }
+
+    pub fn set_pack_bleed(&mut self, on: bool) {
+        self.engine.controls.pack_bleed = on;
+    }
+
+    pub fn set_reverser(&mut self, on: bool) {
+        self.engine.controls.reverser = on;
+    }
+
+    /// Direct N1 demand in % (autothrottle / log replay); negative clears it.
+    pub fn set_n1_demand(&mut self, pct: f64) {
+        self.engine.controls.n1_demand_pct = pct;
+    }
+
+    /// Replace the fault set from JSON (all fields optional, missing = unchanged).
+    pub fn set_faults_json(&mut self, json: &str) -> Result<(), JsValue> {
+        let mut current = serde_json::to_value(self.engine.faults).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let patch: serde_json::Value = serde_json::from_str(json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        if let (Some(cur), Some(p)) = (current.as_object_mut(), patch.as_object()) {
+            for (k, v) in p {
+                cur.insert(k.clone(), v.clone());
+            }
+        }
+        self.engine.faults = serde_json::from_value::<Faults>(current).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn clear_faults(&mut self) {
+        self.engine.faults = Faults::none();
+    }
+
+    pub fn faults_json(&self) -> String {
+        serde_json::to_string(&self.engine.faults).unwrap_or_default()
     }
 
     pub fn set_environment(&mut self, altitude_m: f64, mach: f64, delta_isa_k: f64) {

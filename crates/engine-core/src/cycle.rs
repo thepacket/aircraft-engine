@@ -45,6 +45,14 @@ pub struct Nozzle {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CycleResult {
     pub stations: Vec<Station>,
+    /// Customer bleed flow extracted at station 3 (kg/s)
+    pub bleed_kg_s: f64,
+    /// Booster flow dumped to the bypass by the variable bleed valves (kg/s)
+    pub vbv_dump_kg_s: f64,
+    /// Burner static pressure estimate Ps3 (kPa), the FADEC's Wf/Ps3 reference
+    pub ps3_kpa: f64,
+    /// Reverse thrust component (N, positive = rearward force on the aircraft)
+    pub thrust_reverse_n: f64,
     pub w2_kg_s: f64,
     pub w13_kg_s: f64,
     pub w25_kg_s: f64,
@@ -147,7 +155,7 @@ pub fn t4_for_fuel(spec: &EngineSpec, w: f64, t3: f64, wf: f64) -> f64 {
 }
 
 /// Operating condition inputs to the cycle.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct CycleInput {
     /// Corrected fan speed, fraction of 100% (N1c / 100)
     pub n1c: f64,
@@ -160,6 +168,20 @@ pub struct CycleInput {
     /// Combustion on. When false the turbines extract no work (cold cranking,
     /// windmilling) and no fuel is burned.
     pub combustion: bool,
+    /// Customer bleed (anti-ice + packs), fraction of core flow taken at station 3
+    pub bleed_fraction: f64,
+    /// Variable bleed valve position, 0 closed .. 1 open
+    pub vbv_open: f64,
+    /// Thrust reverser deployment, 0 stowed .. 1 deployed
+    pub reverser: f64,
+    /// Fraction of bypass thrust recovered as reverse thrust at full deployment
+    pub reverser_efficiency: f64,
+}
+
+impl CycleInput {
+    pub fn steady(n1c: f64, n2c: f64, t4_k: f64, a9_m2: Option<f64>) -> Self {
+        CycleInput { n1c, n2c, t4_k, a9_m2, combustion: true, bleed_fraction: 0.0, vbv_open: 0.0, reverser: 0.0, reverser_efficiency: 0.0 }
+    }
 }
 
 /// Compressor-side quantities that do not depend on T4 (used by the solvers).
@@ -228,18 +250,24 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
     let p0 = inlet.ambient.pressure_pa;
     let v0 = inlet.true_airspeed_m_s;
 
+    // Customer bleed leaves at station 3; VBV dump leaves the booster for the bypass
+    let fb = input.bleed_fraction.clamp(0.0, 0.3);
+    let w_bleed = cs.w25 * fb;
+    let w_vbv = cs.w25 * spec.bleed.vbv_dump_fraction * input.vbv_open.clamp(0.0, 1.0);
+
     // Combustor
     let fc = d.cooling_bleed_fraction;
-    let w_burner = cs.w25 * (1.0 - fc);
+    let w_burner = cs.w25 * (1.0 - fc - fb);
     let t4 = if input.combustion { input.t4_k.max(cs.tt3) } else { cs.tt3 };
     let wf = if input.combustion { fuel_for_t4(spec, w_burner, cs.tt3, t4) } else { 0.0 };
     let pt4 = cs.pt3 * (1.0 - d.burner_pressure_loss);
     let w4 = w_burner + wf;
-    let w5 = cs.w25 + wf;
+    let w5 = cs.w25 * (1.0 - fb) + wf;
 
-    // Shaft power balances
+    // Shaft power balances (the HPC also compresses the bleed air; the
+    // booster also compresses the VBV dump flow)
     let hpc_power = cs.w25 * CP_AIR * (cs.tt3 - cs.tt25) + d.power_extraction_w;
-    let fan_power = cs.w13 * CP_AIR * (cs.tt13 - inlet.tt2_k) + cs.w25 * CP_AIR * (cs.tt25 - inlet.tt2_k);
+    let fan_power = cs.w13 * CP_AIR * (cs.tt13 - inlet.tt2_k) + (cs.w25 + w_vbv) * CP_AIR * (cs.tt25 - inlet.tt2_k);
 
     let (hpt_power, lpt_power) = if input.combustion {
         (hpc_power / d.eta_mechanical, fan_power / d.eta_mechanical)
@@ -269,15 +297,20 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
     let a9 = input.a9_m2.unwrap_or(core.required_area_m2);
     let thrust_core = w5 * core.exit_velocity_m_s + (core.exit_static_pressure_pa - p0) * a9.min(core.required_area_m2 * 2.0);
     let thrust_byp = cs.w13 * byp.exit_velocity_m_s + (byp.exit_static_pressure_pa - p0) * byp.required_area_m2;
-    let ram_drag = cs.w2 * v0;
-    let net = (thrust_core + thrust_byp - ram_drag).max(0.0);
+    let ram_drag = (cs.w2 + w_vbv) * v0;
+    // Reverser: deployed blocker doors turn the bypass stream forward
+    let rev = input.reverser.clamp(0.0, 1.0);
+    let thrust_reverse = rev * input.reverser_efficiency * thrust_byp;
+    let net = thrust_core + (1.0 - rev) * thrust_byp - thrust_reverse - ram_drag;
+    let net = if rev > 0.0 { net } else { net.max(0.0) };
 
     // Efficiencies
     let ke_rate = 0.5 * (w5 * core.exit_velocity_m_s.powi(2) + cs.w13 * byp.exit_velocity_m_s.powi(2) - cs.w2 * v0 * v0);
+    let net_for_eff = net.max(0.0);
     let fuel_power = wf * d.fuel_lhv_j_kg;
     let thermal = if fuel_power > 0.0 { (ke_rate / fuel_power).clamp(0.0, 1.0) } else { 0.0 };
-    let propulsive = if ke_rate > 0.0 && v0 > 0.0 { (net * v0 / ke_rate).clamp(0.0, 1.0) } else { 0.0 };
-    let overall = if fuel_power > 0.0 { (net * v0 / fuel_power).clamp(0.0, 1.0) } else { 0.0 };
+    let propulsive = if ke_rate > 0.0 && v0 > 0.0 { (net_for_eff * v0 / ke_rate).clamp(0.0, 1.0) } else { 0.0 };
+    let overall = if fuel_power > 0.0 { (net_for_eff * v0 / fuel_power).clamp(0.0, 1.0) } else { 0.0 };
 
     let st = |id: &str, label: &str, tt: f64, pt: f64, w: f64| Station { id: id.to_string(), label: label.to_string(), tt_k: tt, pt_pa: pt, w_kg_s: w };
     let stations = vec![
@@ -295,6 +328,10 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
 
     CycleResult {
         stations,
+        bleed_kg_s: w_bleed,
+        vbv_dump_kg_s: w_vbv,
+        ps3_kpa: cs.pt3 * 0.97 / 1000.0,
+        thrust_reverse_n: thrust_reverse,
         w2_kg_s: cs.w2,
         w13_kg_s: cs.w13,
         w25_kg_s: cs.w25,
@@ -331,10 +368,12 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
 /// through the core nozzle of area `a9`. The required area decreases
 /// monotonically with T4 (hotter gas -> lower turbine pressure ratios -> higher
 /// nozzle pressure -> denser exit flow), so a bisection is sufficient.
-pub fn solve_t4_for_nozzle(spec: &EngineSpec, inlet: &Inlet, n1c: f64, n2c: f64, a9: f64) -> f64 {
-    let cs = cold_section(spec, inlet, n1c, n2c);
+/// `base` carries the operating point (speeds, bleed, VBV); its `t4_k` and
+/// `a9_m2` are overridden.
+pub fn solve_t4_for_nozzle(spec: &EngineSpec, inlet: &Inlet, base: CycleInput, a9: f64) -> f64 {
+    let cs = cold_section(spec, inlet, base.n1c, base.n2c);
     let f = |t4: f64| {
-        let r = cycle(spec, inlet, CycleInput { n1c, n2c, t4_k: t4, a9_m2: Some(a9), combustion: true });
+        let r = cycle(spec, inlet, CycleInput { t4_k: t4, a9_m2: Some(a9), combustion: true, ..base });
         r.core_nozzle.required_area_m2 - a9
     };
     let mut lo = cs.tt3 + 20.0;
@@ -359,6 +398,13 @@ pub fn solve_t4_for_nozzle(spec: &EngineSpec, inlet: &Inlet, n1c: f64, n2c: f64,
     0.5 * (lo + hi)
 }
 
+/// Steady-state operating point at given corrected speeds (closure on the
+/// core nozzle), including bleed and VBV effects.
+pub fn steady_point(spec: &EngineSpec, inlet: &Inlet, base: CycleInput, a9: f64) -> CycleResult {
+    let t4 = solve_t4_for_nozzle(spec, inlet, base, a9);
+    cycle(spec, inlet, CycleInput { t4_k: t4, a9_m2: Some(a9), combustion: true, ..base })
+}
+
 /// Result of sizing the engine at its design point.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesignSizing {
@@ -375,7 +421,7 @@ pub fn size_design_point(spec: &EngineSpec) -> DesignSizing {
     let n1c = 1.0;
     let n2c = interp(&spec.spools.n2_vs_n1, 100.0) / 100.0;
     let cs = cold_section(spec, &inlet, n1c, n2c);
-    let thrust_at = |t4: f64| cycle(spec, &inlet, CycleInput { n1c, n2c, t4_k: t4, a9_m2: None, combustion: true }).net_thrust_n;
+    let thrust_at = |t4: f64| cycle(spec, &inlet, CycleInput::steady(n1c, n2c, t4, None)).net_thrust_n;
     let target = spec.rating.takeoff_thrust_n;
     let mut lo = cs.tt3 + 50.0;
     let mut hi = 2400.0;
@@ -391,7 +437,7 @@ pub fn size_design_point(spec: &EngineSpec) -> DesignSizing {
         }
     }
     let t4 = 0.5 * (lo + hi);
-    let r = cycle(spec, &inlet, CycleInput { n1c, n2c, t4_k: t4, a9_m2: None, combustion: true });
+    let r = cycle(spec, &inlet, CycleInput::steady(n1c, n2c, t4, None));
     DesignSizing {
         core_nozzle_area_m2: r.core_nozzle.required_area_m2,
         bypass_nozzle_area_m2: r.bypass_nozzle.required_area_m2,

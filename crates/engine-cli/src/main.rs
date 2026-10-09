@@ -35,7 +35,7 @@ fn main() {
 /// Steady-state cycle at one operating point: `point <n1 %> [alt m] [mach] [dISA K]`
 fn point(args: &[String]) {
     use engine_core::atmosphere::{inlet, isa};
-    use engine_core::cycle::{cycle, solve_t4_for_nozzle, CycleInput};
+    use engine_core::cycle::{steady_point, CycleInput};
     use engine_core::spec::interp;
     let spec = EngineSpec::cfm56_7b26();
     let d = size_design_point(&spec);
@@ -46,8 +46,7 @@ fn point(args: &[String]) {
     let inl = inlet(isa(alt, disa), mach);
     let n1c = n1 / inl.theta.sqrt() / 100.0;
     let n2c = interp(&spec.spools.n2_vs_n1, n1c * 100.0) / 100.0;
-    let t4 = solve_t4_for_nozzle(&spec, &inl, n1c, n2c, d.core_nozzle_area_m2);
-    let r = cycle(&spec, &inl, CycleInput { n1c, n2c, t4_k: t4, a9_m2: Some(d.core_nozzle_area_m2), combustion: true });
+    let r = steady_point(&spec, &inl, CycleInput::steady(n1c, n2c, 0.0, None), d.core_nozzle_area_m2);
     println!("N1 {:.1}% (N1c {:.1}%)  N2 {:.1}%  alt {:.0} m  M {:.2}  dISA {:+.0} K", n1, n1c * 100.0, n2c * 100.0 * inl.theta.sqrt(), alt, mach, disa);
     println!("thrust {:.0} N ({:.0} lbf)   fuel {:.3} kg/s ({:.0} lb/h)   TSFC {:.3} lb/lbf/h", r.net_thrust_n, r.net_thrust_n / 4.448222, r.wf_kg_s, r.wf_kg_s * 7936.64, r.tsfc * 3600.0 * 9.80665);
     println!("T4 {:.0} K   EGT {:.0} C   OPR {:.2}   FPR {:.3}   BPR {:.2}   W2 {:.1} kg/s   W25 {:.1} kg/s", r.t4_k, r.egt_k - 273.15, r.overall_pressure_ratio, r.fan_pressure_ratio, r.bypass_ratio, r.w2_kg_s, r.w25_kg_s);
@@ -90,7 +89,8 @@ fn run(args: &[String]) {
             continue;
         }
         let t: f64 = parts[1].parse().expect("time");
-        events.push((t, parts[2].to_string(), parts.get(3).map(|s| s.to_string())));
+        let rest = if parts.len() > 3 { Some(parts[3..].join(" ")) } else { None };
+        events.push((t, parts[2].to_string(), rest));
     }
     events.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     let end = events.iter().find(|e| e.1 == "end").map(|e| e.0).unwrap_or_else(|| events.last().map(|e| e.0 + 10.0).unwrap_or(60.0));
@@ -123,6 +123,38 @@ fn apply(e: &mut Engine, cmd: &str, val: Option<&str>) {
         "mach" => e.environment.mach = num(),
         "isa" => e.environment.delta_isa_k = num(),
         "running" => e.set_running(num()),
+        "n1" => e.controls.n1_demand_pct = if val == Some("off") { -1.0 } else { num() },
+        "antiice" => e.controls.anti_ice = on,
+        "pack" => e.controls.pack_bleed = on,
+        "reverser" => e.controls.reverser = on,
+        "fault" => {
+            // fault <name> [value]   e.g. "fault ignition_fail on", "fault start_fuel_factor 1.6"
+            let mut it = val.unwrap_or("").split_whitespace();
+            let name = it.next().unwrap_or("");
+            let v = it.next().unwrap_or("on");
+            let on = matches!(v, "on" | "1" | "true");
+            let x: f64 = v.parse().unwrap_or(0.0);
+            let f = &mut e.faults;
+            match name {
+                "starter_inop" => f.starter_inop = on,
+                "starter_weak" => f.starter_weak = on,
+                "starter_early_cutout" => f.starter_early_cutout = on,
+                "ignition_fail" => f.ignition_fail = on,
+                "start_fuel_factor" => f.start_fuel_factor = x,
+                "fuel_pump_fail" => f.fuel_pump_fail = on,
+                "oil_leak" => f.oil_leak_qt_per_min = x,
+                "fire" => f.fire = on,
+                "n1_governor_fail" => f.n1_governor_fail = on,
+                "compressor_damage" => f.compressor_damage_pct = x,
+                "fod" => f.fod = on,
+                "egt_probe_fail" => f.egt_probe_fail = on,
+                "reverser_stuck" => f.reverser_stuck = on,
+                "surge" => f.trigger_surge = true,
+                "flameout" => f.trigger_flameout = true,
+                "fire_bottle" => f.fire_bottle = true,
+                other => eprintln!("unknown fault {other}"),
+            }
+        }
         "end" => {}
         other => eprintln!("unknown command {other}"),
     }

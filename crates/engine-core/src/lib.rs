@@ -17,7 +17,7 @@ pub mod engine;
 pub mod logger;
 pub mod spec;
 
-pub use engine::{Controls, Engine, EngineState, Environment, Mode};
+pub use engine::{Controls, Engine, EngineState, Environment, Faults, Mode};
 pub use spec::EngineSpec;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
