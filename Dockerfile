@@ -21,6 +21,8 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web ./
+# The IDE's Model tab renders docs/MODEL.md (imported as ../../docs/MODEL.md)
+COPY docs /docs
 COPY --from=wasm /out ./src/wasm
 RUN npm run build
 
