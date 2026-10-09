@@ -1,4 +1,4 @@
-# Aircraft Engine Sim
+# Aircraft Engine Simulators
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Live](https://img.shields.io/badge/live-aircraftengine.fly.dev-4fc3f7.svg)](https://aircraftengine.fly.dev)
