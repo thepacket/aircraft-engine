@@ -1,5 +1,7 @@
 # Aircraft Engine IDE
 
+![Aircraft Engine IDE running the CFM56-7B26: controls, 737NG-style engine indications, performance readouts, cycle stations and strip charts](docs/aircraft-engine.png)
+
 An educational IDE for aircraft engine simulation. The simulators are
 physics-based models built from the published specifications of real
 engines, with virtual cockpit instrumentation and a data logger. Everything
