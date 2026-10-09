@@ -1,0 +1,16 @@
+# Landing roll: touchdown at 65 kt, power lever into beta then max reverse.
+# The blades go to -11 deg, Ng rises to ~85%, thrust goes negative, and the
+# Np overspeed governor tops the fuel if the prop windmills too fast.
+at 0    mach 0.1
+at 0    ctl prop_lever 1
+at 0    running 0
+at 0    log on
+at 5    note Touchdown: power lever to beta (flat pitch)
+at 5    ctl power_lever 0
+at 8    note Max reverse
+at 8    ctl power_lever -0.3
+at 15   mach 0.06
+at 20   mach 0.03
+at 25   note Out of reverse below 40 kt (FOD / ground vortex)
+at 25   ctl power_lever 0
+at 40   end

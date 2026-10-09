@@ -1,32 +1,29 @@
 // Scenario scripts. Two kinds of lines:
-//   at <seconds> <command> [args]           timed event
-//   when <signal> <op> <value> <command> [args]   conditional event, armed at
-//        the time of the preceding `at` line, fires once when true
-// Same `at` syntax as the native engine-cli.
+//   at <seconds> <command> [args]                   timed event
+//   when <signal> <op> <value> <command> [args]     conditional, armed at the
+//        time of the preceding `at` line, fires once when true
+// Commands are engine-generic: `ctl <control> <value>` sets any control of the
+// active engine kind; shorthands (starter, fuel, tla, ...) map onto it.
 import { hasSignal } from "./signals";
 
 export interface ScenarioEvent {
-  t: number;
-  cmd: string;
-  arg: string;
-  line: number;
+  t: number; cmd: string; arg: string; line: number;
   cond?: { signal: string; op: string; value: number };
   fired?: boolean;
 }
 
 export interface ScenarioHandlers {
   engine(target: number | "all"): void;
+  ctl(name: string, value: number): void;
   starter(on: boolean): void;
   fuel(on: boolean): void;
-  tla(v: number): void;
+  lever(v: number): void;
   n1(pct: number | null): void;
   alt(m: number): void;
   mach(v: number): void;
   isa(dK: number): void;
-  running(tla: number): void;
-  antiice(on: boolean): void;
-  pack(on: boolean): void;
-  reverser(on: boolean): void;
+  humidity(x: number): void;
+  running(level: number): void;
   fault(name: string, value: string): void;
   bottle(): void;
   log(on: boolean): void;
@@ -35,7 +32,7 @@ export interface ScenarioHandlers {
   end(): void;
 }
 
-export const COMMANDS = ["engine", "starter", "fuel", "tla", "n1", "alt", "mach", "isa", "running", "antiice", "pack", "reverser", "fault", "bottle", "log", "speed", "note", "end"];
+export const COMMANDS = ["engine", "ctl", "starter", "fuel", "tla", "throttle", "power", "n1", "alt", "mach", "isa", "humidity", "running", "antiice", "pack", "reverser", "fault", "bottle", "log", "speed", "note", "end"];
 const OPS = new Set([">", ">=", "<", "<=", "==", "!="]);
 
 export function parseScenario(text: string): { events: ScenarioEvent[]; errors: string[] } {
@@ -54,7 +51,7 @@ export function parseScenario(text: string): { events: ScenarioEvent[]; errors: 
       events.push({ t: lastAt, cmd, arg: at[3].trim(), line: i + 1 });
     } else if (when) {
       const cmd = when[4].toLowerCase();
-      if (!hasSignal(when[1])) { errors.push(`line ${i + 1}: unknown signal "${when[1]}"`); return; }
+      if (!hasSignal(when[1])) { errors.push(`line ${i + 1}: unknown signal "${when[1]}" for this engine`); return; }
       if (!OPS.has(when[2])) { errors.push(`line ${i + 1}: bad operator "${when[2]}"`); return; }
       if (!COMMANDS.includes(cmd)) { errors.push(`line ${i + 1}: unknown command "${when[4]}"`); return; }
       events.push({ t: lastAt, cmd, arg: when[5].trim(), line: i + 1, cond: { signal: when[1], op: when[2], value: parseFloat(when[3]) } });
@@ -78,7 +75,13 @@ function test(op: string, a: number, b: number): boolean {
   return false;
 }
 
-/** Runs parsed events against the simulation clock. */
+export function parseOnOff(arg: string): number | null {
+  if (/^(on|1|true|run|deploy|hot|both)$/i.test(arg)) return 1;
+  if (/^(off|0|false|cutoff|cold|stow)$/i.test(arg)) return 0;
+  const v = parseFloat(arg);
+  return Number.isFinite(v) ? v : null;
+}
+
 export class ScenarioRunner {
   private t0 = 0;
   private lastT = 0;
@@ -87,13 +90,7 @@ export class ScenarioRunner {
 
   constructor(private events: ScenarioEvent[], private h: ScenarioHandlers, private read: (signal: string) => number) {}
 
-  start(simTime: number): void {
-    this.t0 = simTime;
-    this.active = true;
-    this.current = "";
-    for (const e of this.events) e.fired = false;
-  }
-
+  start(simTime: number): void { this.t0 = simTime; this.active = true; this.current = ""; for (const e of this.events) e.fired = false; }
   stop(): void { this.active = false; }
   get elapsed(): number { return this.lastT - this.t0; }
   get pendingConditions(): string[] {
@@ -101,7 +98,6 @@ export class ScenarioRunner {
     return this.events.filter((e) => e.cond && !e.fired && e.t <= rel).map((e) => `${e.cond!.signal} ${e.cond!.op} ${e.cond!.value} → ${e.cmd} ${e.arg}`);
   }
 
-  /** Call every frame with the current simulation time. */
   tick(simTime: number): void {
     if (!this.active) return;
     this.lastT = simTime;
@@ -117,23 +113,25 @@ export class ScenarioRunner {
   }
 
   private apply(e: ScenarioEvent): void {
-    const on = /^(on|1|true|run|deploy)$/i.test(e.arg);
+    const on = parseOnOff(e.arg) === 1;
     const num = parseFloat(e.arg);
-    this.current = `${e.cond ? "when " + e.cond.signal + e.cond.op + e.cond.value : "t+" + e.t + "s"}: ${e.cmd} ${e.arg}`;
     const n = (d = 0): number => (Number.isFinite(num) ? num : d);
+    this.current = `${e.cond ? "when " + e.cond.signal + e.cond.op + e.cond.value : "t+" + e.t + "s"}: ${e.cmd} ${e.arg}`;
     switch (e.cmd) {
       case "engine": this.h.engine(/^(all|both)$/i.test(e.arg) ? "all" : Math.max(0, n(1) - 1)); break;
+      case "ctl": { const [name, ...rest] = e.arg.split(/\s+/); const v = parseOnOff(rest.join(" ") || "1"); if (v !== null) this.h.ctl(name, v); break; }
       case "starter": this.h.starter(on); break;
       case "fuel": this.h.fuel(on); break;
-      case "tla": this.h.tla(n()); break;
+      case "tla": case "throttle": case "power": this.h.lever(n()); break;
       case "n1": this.h.n1(/^off$/i.test(e.arg) ? null : n()); break;
       case "alt": this.h.alt(n()); break;
       case "mach": this.h.mach(n()); break;
       case "isa": this.h.isa(n()); break;
+      case "humidity": this.h.humidity(n()); break;
       case "running": this.h.running(n()); break;
-      case "antiice": this.h.antiice(on); break;
-      case "pack": this.h.pack(on); break;
-      case "reverser": this.h.reverser(on); break;
+      case "antiice": this.h.ctl("anti_ice", on ? 1 : 0); break;
+      case "pack": this.h.ctl("pack_bleed", on ? 1 : 0); break;
+      case "reverser": this.h.ctl("reverser", on ? 1 : 0); break;
       case "fault": { const [name, ...rest] = e.arg.split(/\s+/); this.h.fault(name, rest.join(" ") || "on"); break; }
       case "bottle": this.h.bottle(); break;
       case "log": this.h.log(on); break;

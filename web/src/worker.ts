@@ -11,6 +11,7 @@ type Msg =
   | { type: "reset" }
   | { type: "engines"; count: number }
   | { type: "spec"; json: string; id: number }
+  | { type: "kind"; kind: string; id: number }
   | { type: "csv"; engine: number; id: number }
   | { type: "faults"; target: number | "all"; patch: Record<string, unknown> | null };
 
@@ -28,7 +29,7 @@ function makeSims(n: number): void {
 
 function postMeta(id?: number): void {
   const s = sims[0];
-  (self as unknown as Worker).postMessage({ type: "meta", id, spec: s.spec_json(), sizing: s.sizing_json(), version: Simulator.version(), defaultSpec: Simulator.default_spec_json() });
+  (self as unknown as Worker).postMessage({ type: "meta", id, kind: s.kind(), spec: s.spec_json(), sizing: s.sizing_json(), version: Simulator.version(), defaultSpec: Simulator.default_spec_json_for(s.kind()) });
 }
 
 function tick(): void {
@@ -82,6 +83,12 @@ self.onmessage = async (ev: MessageEvent<Msg>) => {
         probe.free();
         specJson = m.json;
         for (const s of sims) s.set_spec_json(m.json);
+        postMeta(m.id);
+        break;
+      }
+      case "kind": {
+        specJson = Simulator.default_spec_json_for(m.kind);
+        for (const s of sims) s.set_spec_json(specJson);
         postMeta(m.id);
         break;
       }

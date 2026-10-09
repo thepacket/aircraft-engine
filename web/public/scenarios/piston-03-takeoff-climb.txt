@@ -1,0 +1,19 @@
+# Takeoff and climb: full throttle static rpm ~2,350, then climbing at 75 kt.
+# Watch CHT rise toward ~380-420 F in the climb, oil temp settling, and how
+# much power is left at 5,000 ft full rich.
+at 0    running 0
+at 0    log on
+at 5    note Full throttle, brakes released
+at 5    ctl throttle 1
+at 10   mach 0.11
+at 10   note Climb at 75 kt: watch CHT
+at 10   speed 5
+at 30   alt 500
+at 60   alt 1000
+at 90   alt 1500
+at 120  alt 1524
+at 120  note 5,000 ft: full throttle gives only ~22 inHg. Lean to best power
+at 120  speed 1
+at 125  ctl mixture 0.6
+at 140  mach 0.17
+at 160  end

@@ -1,7 +1,10 @@
 // Main-thread client for the simulation worker.
-import type { DesignSizing, EngineSpec, EngineState, EngineTarget } from "./types";
+import type { AnySpec, AnyState, EngineTarget } from "./types";
 
-type StateListener = (states: EngineState[]) => void;
+type StateListener = (states: AnyState[]) => void;
+type DesignSizing = Record<string, unknown>;
+type EngineSpec = AnySpec;
+type EngineState = AnyState;
 
 export class SimClient {
   private worker: Worker;
@@ -13,6 +16,7 @@ export class SimClient {
   defaultSpecJson = "";
   sizing!: DesignSizing;
   version = "";
+  kind = "turbofan";
   engines: number;
   latest: EngineState[] = [];
 
@@ -31,6 +35,7 @@ export class SimClient {
           case "meta": {
             c.spec = JSON.parse(m.spec);
             c.specJson = m.spec;
+            c.kind = m.kind ?? "turbofan";
             c.sizing = JSON.parse(m.sizing);
             c.version = m.version;
             c.defaultSpecJson = m.defaultSpec;
@@ -81,6 +86,12 @@ export class SimClient {
     return r;
   }
   csv(engine: number): Promise<string> { return this.request<string>({ type: "csv", engine }); }
+  async setKind(kind: string): Promise<{ spec: EngineSpec; sizing: DesignSizing }> {
+    const r = await this.request<{ spec: EngineSpec; sizing: DesignSizing }>({ type: "kind", kind });
+    this.specJson = JSON.stringify(r.spec, null, 2);
+    return r;
+  }
+  setControl(name: string, value: number, t: EngineTarget = "all"): void { this.cmd("set_control", [name, value], t); }
   setFaults(target: EngineTarget, patch: Record<string, unknown>): void { this.worker.postMessage({ type: "faults", target, patch }); }
   clearFaults(target: EngineTarget): void { this.worker.postMessage({ type: "faults", target, patch: null }); }
   // Convenience wrappers
@@ -91,7 +102,7 @@ export class SimClient {
   setPackBleed(on: boolean, t: EngineTarget = "all"): void { this.cmd("set_pack_bleed", [on], t); }
   setReverser(on: boolean, t: EngineTarget = "all"): void { this.cmd("set_reverser", [on], t); }
   setN1Demand(pct: number, t: EngineTarget = "all"): void { this.cmd("set_n1_demand", [pct], t); }
-  setEnvironment(alt: number, mach: number, disa: number): void { this.cmd("set_environment", [alt, mach, disa]); }
+  setEnvironment(alt: number, mach: number, disa: number, humidity = 0.4): void { this.cmd("set_environment_full", [alt, mach, disa, humidity]); }
   setRunning(tla: number, t: EngineTarget = "all"): void { this.cmd("set_running", [tla], t); }
   loggerStart(): void { this.cmd("logger_start"); }
   loggerStop(): void { this.cmd("logger_stop"); }

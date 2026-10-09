@@ -1,0 +1,17 @@
+# Fuel starvation: selector OFF in cruise. The float bowl keeps the engine
+# running for a few seconds, then it quits. Restart: selector BOTH, pump on,
+# mixture rich, crank.
+at 0    alt 1500
+at 0    mach 0.17
+at 0    running 0.7
+at 0    log on
+at 10   note Fuel selector OFF
+at 10   ctl fuel_selector 0
+when rpm < 400  note Engine failure. Selector BOTH, pump ON, mixture RICH, crank
+when rpm < 400  ctl fuel_selector 3
+when rpm < 400  ctl fuel_pump on
+when rpm < 400  ctl mixture 1
+when rpm < 400  ctl starter on
+when rpm >= 1500 ctl starter off
+when rpm >= 1500 note Restarted
+at 60   end

@@ -1,0 +1,14 @@
+# Hot start: a weak battery motors the gas generator to only ~12% Ng, so the
+# fuel lights with too little airflow and ITT runs away past the 1,090 C
+# start limit. Abort: condition lever CUTOFF, keep motoring to cool.
+at 0    fault starter_weak on
+at 0    fault start_fuel_factor 1.7
+at 0    log on
+at 0    ctl prop_lever 1
+at 2    ctl starter on
+at 25   note Ng only 12%: fuel on anyway (do not do this)
+at 25   ctl condition_lever 1
+when itt >= 1090  note HOT START: ITT past 1,090 C. Condition lever CUTOFF, motor 30 s
+when itt >= 1090  ctl condition_lever 0
+at 80   ctl starter off
+at 90   end

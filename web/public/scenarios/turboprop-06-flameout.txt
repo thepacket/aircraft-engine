@@ -1,0 +1,15 @@
+# Flameout in cruise: the gas generator windmills, ITT falls, torque to zero.
+# Ignition ON relights it within the envelope (Ng above 12%, below 20,000 ft).
+at 0    alt 2500
+at 0    mach 0.25
+at 0    ctl prop_lever 1
+at 0    running 0.7
+at 0    log on
+at 10   fault flameout
+at 10   note Flameout: torque zero, Ng decaying, prop on the fine stop
+at 14   note Ignition ON: relight
+at 14   ctl ignition on
+when ng >= 50   ctl ignition off
+when ng >= 50   note Relit and back to idle; power lever up
+when ng >= 50   ctl power_lever 0.7
+at 90   end

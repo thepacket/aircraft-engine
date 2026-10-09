@@ -144,3 +144,17 @@ table.stats th:first-child, table.stats td:first-child { text-align: left; }
 .readout .v.warn { color: var(--amber); }
 .warning.amber { background: #4a3a10; color: #ffe0a3; border-color: var(--amber); }
 .eng-tag { font-family: var(--mono); color: var(--muted); margin-right: 4px; }
+
+/* ---- dynamic controls ---- */
+#controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+#controls .c1 { grid-column: span 1; }
+#controls .c2 { grid-column: span 2; }
+#controls .c3 { grid-column: span 3; }
+#controls .sel { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 11px; }
+#controls .sel select { width: 100%; }
+#controls .toggle { height: 100%; }
+#controls .momentary { background: #1b2530; border: 2px solid #2d3b4b; color: var(--text); border-radius: 6px; padding: 8px; font-weight: 700; letter-spacing: 1px; cursor: pointer; line-height: 1.3; }
+#controls .momentary:active { background: #243242; }
+#controls .momentary small { font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.env-grid { grid-template-columns: 1fr 1fr 1fr 1fr; }
+#n1-hold-row.hidden { display: none; }

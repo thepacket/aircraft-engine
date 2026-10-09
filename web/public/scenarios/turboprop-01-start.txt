@@ -1,0 +1,13 @@
+# PT6A-114A ground start: prop lever full, starter, condition lever to LOW
+# IDLE at 12-15% Ng, watch ITT (start limit 1,090 C), starter off at idle.
+at 0    log on
+at 0    ctl prop_lever 1
+at 2    note Starter ON: Ng motoring, oil pressure rising
+at 2    ctl starter on
+when ng >= 13   note Condition lever LOW IDLE: light-off in ~2 s, watch ITT
+when ng >= 13   ctl condition_lever 1
+when ng >= 50   ctl starter off
+when ng >= 50   note Stabilised at low idle: Ng ~52%, ITT ~500 C, prop turning slowly
+at 70   ctl condition_lever 2
+at 70   note HIGH IDLE: Ng 65%
+at 90   end

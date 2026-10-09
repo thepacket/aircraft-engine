@@ -1,7 +1,7 @@
 // Canvas strip chart with selectable channel, per-engine series, a reference
 // overlay (replayed flight log) and a hover cursor with readouts.
-import { SIGNALS, signal, type Signal } from "./signals";
-import type { EngineState } from "./types";
+import { activeSignals, signal, type Signal } from "./signals";
+import type { AnyState as EngineState } from "./types";
 import { unitSystem } from "./units";
 
 const ENGINE_COLORS = ["#4fc3f7", "#b388ff"];
@@ -50,7 +50,7 @@ export class StripChart {
     this.windowS = windowS;
     this.setEngines(engines);
     this.select = select ?? document.createElement("select");
-    for (const s of SIGNALS) {
+    for (const s of activeSignals()) {
       const o = document.createElement("option");
       o.value = s.key; o.textContent = s.label;
       this.select.appendChild(o);

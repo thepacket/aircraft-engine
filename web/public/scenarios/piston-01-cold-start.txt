@@ -1,0 +1,24 @@
+# Lycoming O-360 cold start, warm-up and run-up (Piper Archer checklist order).
+# Watch: cranking rpm ~170, fire within a few seconds when primed, cold oil
+# pressure high, CHT climbing slowly, then the 1,800 rpm run-up.
+at 0    log on
+at 0    note Mixture rich, fuel pump on, 3 primer shots, magnetos BOTH
+at 0    ctl mixture 1
+at 0    ctl fuel_pump on
+at 2    ctl primer 3
+at 4    ctl magnetos 3
+at 6    note Crank
+at 6    ctl starter on
+when rpm >= 500  ctl starter off
+when rpm >= 500  note Running: check oil pressure within 30 s
+at 15   ctl fuel_pump off
+at 20   ctl throttle 0.2
+at 20   note Warm up at ~1,000 rpm until oil temp is in the green
+at 120  speed 5
+at 300  speed 1
+at 300  note Run-up: 1,800 rpm, carb heat check, then idle
+at 300  ctl throttle 0.47
+at 320  ctl carb_heat on
+at 335  ctl carb_heat off
+at 345  ctl throttle 0
+at 360  end

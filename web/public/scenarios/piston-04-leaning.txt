@@ -1,0 +1,20 @@
+# Leaning at 8,000 ft: full rich is too rich (the carburettor meters by
+# venturi pressure drop, so F/A rises as the air thins). Lean toward peak EGT,
+# then 50 F rich of peak for cruise, and see the fuel flow and power change.
+at 0    alt 2438
+at 0    mach 0.18
+at 0    running 1
+at 0    log on
+at 5    note Full rich at 8,000 ft: F/A ~0.10, EGT low, 13 gph
+at 10   ctl mixture 0.8
+at 20   ctl mixture 0.7
+at 30   ctl mixture 0.6
+at 40   ctl mixture 0.5
+at 50   ctl mixture 0.42
+at 60   ctl mixture 0.36
+at 70   note Near peak EGT. Lean of peak: EGT and power fall, then roughness
+at 70   ctl mixture 0.30
+at 85   ctl mixture 0.24
+at 100  note Back to 50 F rich of peak for cruise
+at 100  ctl mixture 0.45
+at 130  end

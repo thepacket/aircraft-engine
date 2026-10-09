@@ -1,0 +1,17 @@
+# Carburettor icing: 10 C, high humidity, partial throttle in cruise. The
+# rpm and manifold pressure creep down over minutes; carb heat first makes it
+# worse (ice melting through the engine), then clears it.
+at 0    isa 2
+at 0    humidity 0.9
+at 0    alt 1000
+at 0    mach 0.16
+at 0    running 0.6
+at 0    log on
+at 5    note Cruise at 60% throttle in icing conditions. Watch rpm and MAP.
+at 5    speed 5
+when carb_ice >= 0.3  speed 1
+when carb_ice >= 0.3  note RPM dropping: apply carb heat (momentary roughness while the ice clears)
+when carb_ice >= 0.3  ctl carb_heat on
+when carb_ice <= 0.02 note Ice cleared. Carb heat off costs a little power
+when carb_ice <= 0.02 ctl carb_heat off
+at 600  end

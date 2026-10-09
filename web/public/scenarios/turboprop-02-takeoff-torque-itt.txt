@@ -1,0 +1,15 @@
+# Takeoff power: at sea level the engine is torque limited (1,970 ft lb)
+# before ITT (805 C). Hot and high it becomes ITT limited: the same lever
+# gives less torque. Watch which gauge reaches its red line first.
+at 0    ctl prop_lever 1
+at 0    running 0
+at 0    log on
+at 5    note Sea level ISA: power lever to max, torque ~1,866 ft lb, ITT ~690 C
+at 5    ctl power_lever 1
+at 25   ctl power_lever 0
+at 40   note Same at 2,000 m, ISA+25: ITT limited, torque down
+at 40   alt 2000
+at 40   isa 25
+at 45   ctl power_lever 1
+at 65   ctl power_lever 0
+at 80   end

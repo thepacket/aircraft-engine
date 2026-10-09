@@ -18,7 +18,8 @@
           <span class="sim-time" id="sim-time">t = 0.0 s</span>
         </div>
         <div class="topbar-right">
-          <label>Engines <select id="engine-count"><option value="1">1</option><option value="2">2</option></select></label>
+          <label>Engine <select id="engine-kind"><option value="turbofan">CFM56-7B26 turbofan</option><option value="piston">Lycoming O-360 piston</option><option value="turboprop">PT6A-114A turboprop</option></select></label>
+          <label>Count <select id="engine-count"><option value="1">1</option><option value="2">2</option></select></label>
           <label>Units <select id="units"><option value="si">SI</option><option value="imp">Imperial</option></select></label>
           <label>Speed
             <select id="sim-speed">
@@ -49,34 +50,18 @@
             <button class="btn small focus active" data-focus="0">ENG 1</button>
             <button class="btn small focus" data-focus="1">ENG 2</button>
           </div>
-          <div class="ctl-grid">
-            <button id="btn-starter" class="toggle">STARTER<br /><small>OFF</small></button>
-            <button id="btn-fuel" class="toggle">FUEL LEVER<br /><small>CUTOFF</small></button>
-          </div>
-          <label class="slider-label">Thrust lever <span id="tla-val">0%</span>
-            <input id="tla" type="range" min="0" max="100" value="0" step="0.5" />
-          </label>
-          <div class="preset-row">
-            <button class="btn small" data-tla="0">Idle</button>
-            <button class="btn small" data-tla="55">Approach</button>
-            <button class="btn small" data-tla="80">Climb</button>
-            <button class="btn small" data-tla="100">TO/GA</button>
-            <label class="inline"><input type="checkbox" id="n1-hold" /> N1 hold <input id="n1-hold-val" type="number" value="85" min="20" max="104" step="0.5" style="width:58px" />%</label>
-          </div>
-          <div class="ctl-grid three">
-            <button id="btn-reverser" class="toggle small">REVERSER<br /><small>STOWED</small></button>
-            <button id="btn-antiice" class="toggle small">ENG ANTI-ICE<br /><small>OFF</small></button>
-            <button id="btn-pack" class="toggle small">PACK BLEED<br /><small>OFF</small></button>
-          </div>
+          <div id="controls"></div>
           <div class="env-grid">
-            <label>Alt (<span class="alt-unit">ft</span>) <input id="alt" type="number" value="0" step="500" /></label>
-            <label>Mach <input id="mach" type="number" value="0" step="0.02" min="0" max="0.9" /></label>
+            <label>Alt <span class="alt-unit">ft</span> <input id="alt" type="number" value="0" step="500" /></label>
+            <label><span id="speed-label">Mach</span> <input id="mach" type="number" value="0" step="0.02" min="0" max="0.9" /></label>
             <label>ΔISA (°C) <input id="disa" type="number" value="0" step="1" min="-40" max="40" /></label>
+            <label>Humidity % <input id="humidity" type="number" value="40" step="5" min="0" max="100" /></label>
           </div>
           <div class="preset-row">
             <button id="btn-jump-idle" class="btn small">Jump to idle</button>
             <button id="btn-jump-cruise" class="btn small">Jump to cruise</button>
             <button id="btn-cold" class="btn small">Cold &amp; dark</button>
+            <label class="inline" id="n1-hold-row"><input type="checkbox" id="n1-hold" /> N1 hold <input id="n1-hold-val" type="number" value="85" min="20" max="104" step="0.5" style="width:58px" />%</label>
           </div>
         </section>
 
@@ -136,12 +121,8 @@
 
           <div class="tab-body hidden" id="tab-help">
             <div class="help">
-              <h3>Start the engine</h3>
-              <ol>
-                <li>Press <b>STARTER</b>. N2 rises as the pneumatic starter motors the core.</li>
-                <li>At about 25% N2, set the <b>FUEL LEVER</b> to RUN. Light-off follows after ~2 s.</li>
-                <li>The starter cuts out at 56% N2; the engine stabilises at ground idle (N1 ≈ 21%, N2 ≈ 60%).</li>
-              </ol>
+              <h3>Three engines</h3>
+              <p>Pick the engine in the top bar. <b>Turbofan</b> (CFM56-7B26): starter, fuel lever at 25% N2, idle at N1 21%. <b>Piston</b> (O-360): mixture rich, 2-3 primer shots cold, magnetos BOTH, crank; mag check at 1,800 rpm. <b>Turboprop</b> (PT6A-114A): prop lever full, starter, condition lever to LOW IDLE at 12-15% Ng, starter off at idle.</p>
               <h3>Scenario script</h3>
               <pre>at 0     starter on
 at 18    fuel on
@@ -153,7 +134,7 @@ at 120   engine 2          # or 1, all
 at 120   fault ignition_fail on
 at 200   end</pre>
               <p>Timed lines: <code>at &lt;s&gt; &lt;cmd&gt;</code>. Conditional lines: <code>when &lt;signal&gt; &lt;op&gt; &lt;value&gt; &lt;cmd&gt;</code>, armed at the preceding <code>at</code> time, fire once. Signals: n1, n2, egt, ff, thrust, oilp, oilt, vib, t4, sm_hpc, alt, mach… (any chart channel).</p>
-              <p>Commands: <code>engine 1|2|all</code>, <code>starter</code>, <code>fuel</code>, <code>tla x</code>, <code>n1 pct|off</code>, <code>alt m</code>, <code>mach x</code>, <code>isa dK</code>, <code>running tla</code>, <code>antiice</code>, <code>pack</code>, <code>reverser</code>, <code>fault name [value]</code>, <code>bottle</code>, <code>log on|off</code>, <code>speed x</code>, <code>note text</code>, <code>end</code>.</p>
+              <p>Commands: <code>engine 1|2|all</code>, <code>ctl &lt;control&gt; &lt;value&gt;</code> (any control of the engine: tla, mixture, magnetos, power_lever, prop_lever, condition_lever, carb_heat…), <code>starter</code>, <code>fuel on|off</code> (fuel lever / mixture / condition lever), <code>tla x</code> (main lever), <code>n1 pct|off</code>, <code>alt m</code>, <code>mach x</code>, <code>isa dK</code>, <code>humidity x</code>, <code>running level</code>, <code>antiice</code>, <code>pack</code>, <code>reverser</code>, <code>fault name [value]</code>, <code>bottle</code>, <code>log on|off</code>, <code>speed x</code>, <code>note text</code>, <code>end</code>.</p>
               <h3>Faults</h3>
               <p>starter_inop, starter_weak, starter_early_cutout, ignition_fail, start_fuel_factor (1 = normal), fuel_pump_fail, oil_leak_qt_per_min, fire, n1_governor_fail, compressor_damage_pct, fod, egt_probe_fail, reverser_stuck; one-shots: surge, flameout, fire_bottle.</p>
               <h3>Replay</h3>
@@ -167,7 +148,7 @@ at 200   end</pre>
 
       <main id="center">
         <section class="panel eicas">
-          <h2>Engine indications <span class="hint">(737NG EICAS style)</span></h2>
+          <h2 id="eicas-title">Engine indications</h2>
           <div id="eicas"></div>
           <div id="warnings" class="warnings"></div>
         </section>

@@ -326,3 +326,149 @@ spool inertia, the start tables.
 - Steady-state accuracy is within a few percent at the calibrated points and
   degrades away from them; transients reproduce the published times and the
   qualitative shape of the published traces, not proprietary test-cell data.
+
+---
+
+# Part II: propeller, piston engine and turboprop
+
+## 11. Propeller (shared)
+
+A single blade element at 75 % radius with an effective blade area, plus the
+induced inflow from momentum theory:
+
+```
+u   = 2π n (0.375 D)               tangential speed at the element
+φ   = atan((V + vi) / u)           inflow angle
+α   = β − φ − α0                   angle of attack (α0 = −2°, cambered section)
+Cl  = Cl_α α, clipped at Cl_max (1.35 positive, 0.9 negative)
+Cd  = Cd0 + k Cl²
+T   = ½ ρ (u² + (V+vi)²) A_b (Cl cos φ − Cd sin φ)
+Q   = ½ ρ (u² + (V+vi)²) A_b (Cl sin φ + Cd cos φ) · 0.375 D
+T   = 2 ρ A_disc (V + vi) vi       momentum theory, iterated for vi
+```
+
+Past the stall angle (14° positive, 10° negative) lift and drag blend to the
+flat-plate values 2 sin α cos α and 2 sin² α over 8°. For reverse thrust at
+forward speed the inflow is capped at −V/2 (vortex-ring boundary). The blade
+area and pitch are calibrated to the aircraft data (static rpm and cruise rpm
+for the fixed-pitch Archer propeller; static thrust and cruise efficiency for
+the Caravan's constant-speed propeller).
+
+## 12. Piston engine: Lycoming O-360-A4M
+
+### 12.1 Induction
+
+Air flow by speed-density, with volumetric efficiency falling at low manifold
+pressure (residual exhaust gas):
+
+```
+ṁ_air = η_v (0.45 + 0.55 MAP/p) · V_d · rpm/120 · MAP / (R T_ind)
+```
+
+The throttle is an orifice: `p − MAP = x(θ) ṁ²`, with the effective area
+shaped as `a_idle + (1 − a_idle) θ^1.8` and `x` fixed by two published points
+(full-throttle loss at rated rpm, idle MAP at idle rpm). Solving the quadratic
+gives MAP for any throttle and rpm. Carburettor heat raises the induction
+temperature 35 K and adds a small restriction; carburettor ice (OAT −7…+21 °C,
+humidity ≥ 55 %, worst at partial throttle) closes the throttle area by up to
+75 % and melts with carb heat.
+
+### 12.2 Mixture
+
+A fixed carburettor jet meters fuel by venturi pressure drop, so the fuel-air
+ratio rises as the air thins:
+
+```
+F/A = 0.088 · m(mixture) · √(ρ0 / ρ_carb)
+```
+
+`m` is the mixture-lever curve (1 at full rich, idle cutoff below 8 %). Peak
+EGT sits at the stoichiometric 0.0667; the engine quits below 0.052.
+
+### 12.3 Power
+
+```
+P_ind = ṁ_air · min(F/A, 0.0667) · LHV · η_i (0.55 + 0.45 MAP/p) · (cylinders firing / 4)
+P_fric = (60 kPa + 35 Pa/rpm · rpm + (p − MAP)) · V_d · rpm/120
+P_brake = P_ind − P_fric
+```
+
+η_i = 0.40 at full load reproduces 180 hp at 2 700 rpm. Single-magneto
+running loses 7 % (slower flame); a fouled plug or a dead cylinder removes a
+cylinder. Rotor dynamics: `J dω/dt = Q_engine + Q_starter − Q_prop` with the
+propeller torque from section 11; the fixed-pitch propeller therefore sets
+the rpm for every throttle and airspeed.
+
+### 12.4 Temperatures, oil and starting
+
+- EGT (°C) = 560 + 300·load − 7 000·(F/A − 0.0667) rich side, 9 000 on the
+  lean side; 3 s thermocouple lag.
+- CHT (°F) target = OAT + 230 + 200·load − 0.7·TAS(kt) with rich-mixture
+  cooling; 90 s time constant.
+- Oil pressure = 10 + 0.028·rpm psi, derated hot, boosted cold (relief valve
+  at 115 psi); oil temperature target OAT + 100 + 70·load − 0.3·TAS °F.
+- Starting: the starter cranks at ~170 rpm; the engine fires above 90 rpm
+  with magnetos on, F/A above the lean limit and either a prime charge (2–3
+  shots, lasting 8 s) or a warm engine (CHT > 200 °F). Six or more shots
+  cause an induction fire.
+
+Calibration (PA-28-181 POH): full-throttle static 2 350 rpm / 160 hp /
+13.6 gal/h / EGT 1 250 °F; 8 000 ft full throttle 2 550 rpm, 72 % power,
+10.6 gal/h leaned to best power; idle 740 rpm at 12 inHg; magneto drop 56 rpm
+each; climb CHT 365 °F, cruise 300 °F.
+
+## 13. Turboprop: Pratt & Whitney Canada PT6A-114A
+
+### 13.1 Gas generator
+
+Single-spool compressor (PR 9.2, η 0.80 with fall-off away from design),
+reverse-flow combustor (4 % loss), compressor turbine driving the compressor
+and accessories, then a free power turbine (PT):
+
+```
+P_comp = W cp_a (T3 − T2) + P_ext         ΔT_CT = P_comp / (η_m W4 cp_g)
+P45 = P4 / π_CT(T4)                        CT pressure ratio from η_CT
+ΔT_PT = η_PT η_Np · T45 · (1 − (P5/P45)^((γ−1)/γ))     P5 = 1.05 p0 (exhaust stubs)
+P_shaft = η_gearbox · W45 cp_g ΔT_PT
+```
+
+ITT is T45, the inter-turbine temperature. η_Np reduces the PT efficiency
+away from its design speed ratio (`1 − 0.6 (1 − Np/1900)²`).
+
+### 13.2 Closure
+
+The PT nozzle guide vanes fix T4 for a given Ng: `W45 √T45 / P45 = A45 φ`,
+where φ is the flow function, 1 when choked and falling as
+`((1 − π_PT^−k)/(1 − π_crit^−k))^0.08` when the PT pressure ratio is low (idle).
+A45 is sized so that 100 % Ng gives 675 shp at sea level. Published idle,
+takeoff and cruise points are reproduced: idle Ng 52 % / ITT 500 °C /
+136 lb/h; takeoff ITT 684 °C / 424 lb/h / torque 1 866 ft·lb; 10 000 ft cruise
+torque 1 390 ft·lb / 302 lb/h / prop efficiency 0.84.
+
+### 13.3 Controls and propeller
+
+- Power lever: −0.3 … 0 reverse (blade angle to −11°, Ng up to 88 %), 0 …
+  0.12 beta range (flat pitch), 0.12 … 1 forward (Ng from idle to 100 %).
+- Condition lever: cutoff / low idle 52 % / high idle 65 %.
+- Prop lever: feather (86°) below 5 %, then 1 600 … 1 900 rpm governed. The
+  governor moves the blade angle at 0.08°/rpm·s; below the power needed to
+  reach the selected rpm the blades sit on the fine stop (6°) and Np follows
+  the torque balance `J_p dω/dt = Q_PT − Q_prop − Q_fric`.
+- Np overspeed governor: fuel topping above 2 000 rpm; the blades back off
+  above 2 090 rpm.
+- Fuel control: Ng governor with Wf/Ps3 accel (0.30 … 0.34 (kg/h)/kPa) and
+  decel (0.14 … 0.16) schedules, as for the turbofan.
+
+### 13.4 Start, failures, oil
+
+Starter-generator motoring to 20 % Ng (12 % on a weak battery), light-off
+above 12 % Ng within 2 s, start fuel schedule scaled to the idle fuel flow,
+starter cutout at 50 %. Hot start (weak battery, rich schedule), hung start
+(early cutout), wet start (no ignition), flameout and relight (Ng above 12 %,
+below 20 000 ft), surge margin and surge, oil leak to seizure (90 s below
+40 psi), fire and bottle, prop governor failure (frozen blade angle), ITT and
+torque indication failures, chip detector light.
+
+Limits (208B POH): torque 1 970 ft·lb, ITT 805 °C continuous / 865 transient
+/ 1 090 start (2 s), Ng 101.6 %, Np 1 900 (2 090 transient), oil 85–105 psi
+(40 idle), oil temperature 99 °C.

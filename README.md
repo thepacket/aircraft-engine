@@ -6,8 +6,14 @@ engines, with virtual cockpit instrumentation and a data logger. Everything
 runs inside the browser: the web server only delivers static files, and the
 simulation core is Rust compiled to WebAssembly.
 
-Default engine: **CFM International CFM56-7B26** (Boeing 737-800/900),
-26,300 lbf takeoff thrust. Live: https://aircraftengine.fly.dev
+Three engine families, each validated against its published data. Live:
+https://aircraftengine.fly.dev
+
+| Engine | Type | Aircraft | Rating |
+|---|---|---|---|
+| CFM International CFM56-7B26 | two-spool high-bypass turbofan | Boeing 737-800/900 | 26,300 lbf |
+| Lycoming O-360-A4M | 4-cylinder carburetted piston, fixed-pitch prop | Piper PA-28-181 Archer, Cessna 172 class | 180 hp |
+| Pratt & Whitney Canada PT6A-114A | free-turbine turboprop, constant-speed prop | Cessna 208B Grand Caravan | 675 shp |
 
 **What it teaches**
 
@@ -25,6 +31,12 @@ Default engine: **CFM International CFM56-7B26** (Boeing 737-800/900),
   drive the model from the logged levers or N1, overlay the logged channels
   on the charts and tabulate the errors.
 - Twin-engine operation with per-engine lever targeting and faults.
+- Piston lessons: cold start and priming, magneto check with a fouled plug,
+  takeoff and climb temperatures, leaning to peak EGT at altitude,
+  carburettor icing, fuel starvation and restart.
+- Turboprop lessons: start, torque versus ITT limits hot and high, propeller
+  governing and feather, hot start on a weak battery, reverse on the landing
+  roll, flameout and relight.
 - The complete model documentation (equations, calibration, limits) is in
   [docs/MODEL.md](docs/MODEL.md) and in the IDE's Model tab.
 
@@ -35,9 +47,13 @@ aircraft-engine/
 │   │   ├── src/atmosphere.rs   ISA atmosphere, inlet total conditions
 │   │   ├── src/spec.rs         Engine specification (ratings, geometry, cycle, limits)
 │   │   ├── src/cycle.rs        Station-by-station thermodynamic cycle, nozzles, sizing
-│   │   ├── src/engine.rs       FADEC, spool dynamics, start/shutdown, sensors, limits
+│   │   ├── src/engine.rs       Turbofan: FADEC, spool dynamics, start/shutdown, sensors, limits
+│   │   ├── src/propeller.rs    Blade-element propeller with induced inflow (piston + turboprop)
+│   │   ├── src/piston.rs       Lycoming O-360: induction, mixture, power, temperatures, starting
+│   │   ├── src/turboprop.rs    PT6A-114A: gas generator, free power turbine, governor, start
+│   │   ├── src/any.rs          Engine-kind dispatcher (one interface for wasm and CLI)
 │   │   ├── src/logger.rs       Fixed-rate CSV data logger
-│   │   └── tests/validation.rs Checks against published operating points
+│   │   └── tests/              validation.rs (turbofan), piston.rs, turboprop.rs
 │   ├── engine-wasm/      wasm-bindgen bindings
 │   └── engine-cli/       Native runner: `spec`, `design`, `point`, `run <script>`
 ├── web/                  TypeScript IDE (Vite). Static output in web/dist
@@ -69,7 +85,8 @@ cd web && npm run build      # -> web/dist
 cd web && npm run preview    # or any static server, e.g. python3 -m http.server -d dist
 ```
 
-Scenario scripts (see `web/public/scenarios/`) use timed and conditional lines:
+Scenario scripts (see `web/public/scenarios/`) use timed and conditional
+lines; `ctl <control> <value>` sets any control of the selected engine:
 
 ```
 at 0     starter on
@@ -79,14 +96,22 @@ at 70    tla 1.0
 when n1 >= 95   fault surge
 at 120   engine 2
 at 120   fault ignition_fail on
+# piston / turboprop controls through ctl:
+at 0     ctl magnetos 3
+at 2     ctl primer 3
+at 0     ctl prop_lever 1
+when ng >= 13   ctl condition_lever 1
 ```
 
 Native tools without a browser:
 
 ```bash
-cargo run -p engine-cli -- point 100            # takeoff point, SL static
+cargo run -p engine-cli -- point 100            # turbofan takeoff point, SL static
 cargo run -p engine-cli -- point 85 10668 0.78  # N1 85% at FL350 M0.78
+cargo run -p engine-cli -- spec piston          # default spec JSON of an engine kind
 cargo run -p engine-cli -- run web/public/scenarios/01-ground-start.txt > log.csv
+cargo run -p engine-cli -- run web/public/scenarios/piston-01-cold-start.txt --engine piston > log.csv
+cargo run -p engine-cli -- run web/public/scenarios/turboprop-01-start.txt --engine turboprop > log.csv
 ```
 
 ## Architecture
@@ -97,10 +122,22 @@ only serves static files; nothing about a session leaves the browser. Share
 links put the scenario, spec and settings into the URL fragment; edits are
 also kept in the browser's local storage.
 
-## What the model reproduces
+## What the models reproduce
 
-Published figures from the FAA type certificate data sheet, the 737NG FCOM
-and CFM data are inputs: rated thrust, flat rating, fan diameter, mass flow,
+**Piston (O-360, PA-28-181 POH):** full-throttle static 2,350 rpm / 160 hp /
+13.6 gal/h; 8,000 ft full throttle 2,550 rpm, 72 % power, 10.6 gal/h leaned;
+idle 740 rpm at 12 inHg; magneto drop ~56 rpm each; climb CHT ~365 °F, cruise
+~300 °F; cold start needs prime, carburettor ice forms in the 10 °C humid band
+and clears with carb heat.
+
+**Turboprop (PT6A-114A, 208B POH):** 675 shp at 100 % Ng, takeoff ITT 684 °C
+and 424 lb/h, torque 1,866 ft·lb at 1,900 rpm, static thrust ~2,600 lbf;
+idle Ng 52 %, ITT ~500 °C, 136 lb/h; 10,000 ft cruise 1,390 ft·lb at 302 lb/h;
+ground start ~28 s with ITT peak ~640 °C; weak-battery hot start past 1,090 °C;
+torque limited at sea level, ITT limited hot and high.
+
+**Turbofan (CFM56-7B26):** published figures from the FAA type certificate
+data sheet, the 737NG FCOM and CFM data are inputs: rated thrust, flat rating, fan diameter, mass flow,
 bypass ratio, pressure ratios, N1/N2 at 100%, idle speeds, all EGT, speed and
 oil limits, starter and start envelope. The validation suite checks that the
 model lands on the published operating points:

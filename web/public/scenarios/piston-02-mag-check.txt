@@ -1,0 +1,25 @@
+# Magneto check at 1,800 rpm: each mag alone should drop 75-125 rpm with no
+# more than 50 rpm difference. Then the same check with a fouled plug, and
+# with a dead magneto.
+at 0    running 0.47
+at 0    log on
+at 5    note Both mags: note rpm
+at 10   note LEFT only
+at 10   ctl magnetos 1
+at 20   ctl magnetos 3
+at 25   note RIGHT only
+at 25   ctl magnetos 2
+at 35   ctl magnetos 3
+at 45   note Fouled plug on the left-mag side: big drop and roughness on LEFT
+at 45   fault plug_fouled on
+at 48   ctl magnetos 1
+at 60   ctl magnetos 3
+at 65   fault plug_fouled off
+at 70   note Dead right magneto: engine quits on RIGHT alone
+at 70   fault mag_right_fail on
+at 73   ctl magnetos 2
+when rpm < 300  ctl magnetos 3
+when rpm < 300  note Back to BOTH: restart with the starter
+when rpm < 300  ctl starter on
+when rpm >= 600 ctl starter off
+at 110  end

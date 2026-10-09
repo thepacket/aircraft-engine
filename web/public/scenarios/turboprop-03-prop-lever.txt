@@ -1,0 +1,20 @@
+# Propeller governing: the prop lever sets rpm, the governor changes blade
+# angle to hold it. Lower rpm at the same power means more torque. Feather
+# stops the prop after a shutdown in flight.
+at 0    alt 1500
+at 0    mach 0.25
+at 0    ctl prop_lever 1
+at 0    running 0.7
+at 0    log on
+at 5    note 1,900 rpm governed. Pull the prop lever to 1,600: blade angle coarsens, torque rises
+at 10   ctl prop_lever 0.1
+at 30   ctl prop_lever 1
+at 45   note Shut down (condition lever CUTOFF) and feather
+at 45   ctl condition_lever 0
+at 48   ctl prop_lever 0
+at 90   note Prop feathered and stopped; unfeather and restart with the starter
+at 90   ctl prop_lever 1
+at 92   ctl starter on
+when ng >= 13   ctl condition_lever 1
+when ng >= 50   ctl starter off
+at 150  end
