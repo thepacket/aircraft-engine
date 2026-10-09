@@ -107,10 +107,54 @@ cd web && npm run build      # -> web/dist
 cd web && npm run preview    # or any static server, e.g. python3 -m http.server -d dist
 ```
 
-Deployment: the Dockerfile builds the wasm module and the web bundle in
-stages and serves `web/dist` with nginx on port 8080. `fly deploy --ha
---remote-only` builds it on Fly's remote builder and runs two machines in the
-region set in `fly.toml`. Any static host works just as well.
+## Deployment
+
+The public instance at https://aircraftengine.fly.dev runs on [Fly.io](https://fly.io).
+Because the simulation runs in the browser, the deployment is only a static
+file server: there is no backend, no database and nothing about a session
+leaves the visitor's machine.
+
+**How it is built.** The [Dockerfile](Dockerfile) has three stages:
+
+1. `rust:1-slim-bookworm` installs the `wasm32-unknown-unknown` target and
+   the pinned `wasm-bindgen-cli`, compiles `engine-wasm` in release mode and
+   generates the JS bindings.
+2. `node:20-alpine` installs the web dependencies, copies the bindings and
+   `docs/MODEL.md` (rendered in the Model tab), and runs `vite build`.
+3. `nginx:1.27-alpine` serves `web/dist` on port 8080 with
+   [deploy/nginx.conf](deploy/nginx.conf): the `application/wasm` MIME type
+   (so the browser can stream-compile the module), gzip, a one-year immutable
+   cache for the hashed assets and `no-cache` for `index.html`, and a
+   health check on `/`.
+
+The final image is about 18 MB. The first remote build takes several minutes
+because `wasm-bindgen-cli` is compiled from source; later builds reuse that
+cached layer.
+
+**Configuration** is in [fly.toml](fly.toml): app `aircraftengine`, primary
+region `yyz` (Toronto), two `shared-cpu-1x` machines with 256 MB each,
+`auto_stop_machines` off and `min_machines_running = 2` so both stay up,
+HTTPS forced, and an HTTP health check every 15 s. Fly's proxy balances
+requests across the two machines and restarts one that fails its check.
+
+**Commands** (requires `flyctl` and `fly auth login`):
+
+```bash
+fly deploy --ha --remote-only      # build on Fly's builder, roll out to both machines
+fly status                         # machines, regions, health checks
+fly logs                           # nginx access and error logs
+fly scale count 2 --region yyz     # adjust the machine count
+fly scale memory 512               # adjust memory per machine
+fly ips allocate-v4                # dedicated IPv4 (needed only for a custom domain without CNAME)
+fly certs add sim.example.com      # custom domain with automatic TLS
+```
+
+To deploy your own copy, change `app` in `fly.toml` (names are global on
+Fly), run `fly apps create <name>`, then `fly deploy --ha --remote-only`. The
+same `Dockerfile` runs anywhere Docker does (`docker build -t engine-sim . &&
+docker run -p 8080:8080 engine-sim`), and `web/dist` can be dropped onto any
+static host such as GitHub Pages, Netlify or an S3 bucket, since the build
+uses relative asset paths.
 
 Scenario scripts (see `web/public/scenarios/`) use timed and conditional
 lines; `ctl <control> <value>` sets any control of the selected engine:
