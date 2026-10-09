@@ -3,7 +3,12 @@
 This is the complete description of the physics in `crates/engine-core`. Every
 equation here is implemented literally in the code, and every number that is
 not a physical constant lives in the engine specification JSON shown in the
-IDE. The default engine is the CFM International CFM56-7B26.
+IDE.
+
+Part I (sections 1–10) covers the turbofan, the CFM International CFM56-7B26.
+Part II (sections 11–14) covers the shared propeller model, the Lycoming
+O-360-A4M piston engine and the Pratt & Whitney Canada PT6A-114A turboprop.
+Section 15 lists the validation tests that pin every number quoted here.
 
 ## 1. Scope and philosophy
 
@@ -198,7 +203,7 @@ The governor is proportional on N1 error with a feed-forward of the steady
 fuel flow for the current speeds:
 
 ```
-Wf,demand = Wf,steady(N1, N2) + K (N1,cmd − N1)        K = 0.03 kg/s per %
+Wf,demand = Wf,steady(N1, N2) + K (N1,cmd − N1)        K = 0.012 kg/s per %
 ```
 
 and is then clamped by the **acceleration schedule** and the **deceleration
@@ -210,9 +215,13 @@ Wf,max = (Wf/Ps3)_accel(N2c) · Ps3          Wf,min = (Wf/Ps3)_decel(N2c) · Ps3
 ```
 
 The accel limit protects the HPC from surge (too much fuel raises the burner
-back-pressure); the decel limit protects against lean blow-out. The fuel
-metering unit adds a 0.15 s lag. The IDE plots demand, limits and actual fuel
-flow so the effect of the schedules is visible in every transient.
+back-pressure); the decel limit protects against lean blow-out and can never
+exceed the steady fuel flow. The fuel metering unit adds a 0.15 s lag. The
+small governor gain matters: a slow lever advance keeps the fuel close to the
+steady value, a slam goes straight to the accel limit. After a surge the
+accel limit is re-armed over 4 s so the FADEC cannot slam back into a stalled
+compressor. The IDE plots demand, limits and actual fuel flow so the effect
+of the schedules is visible in every transient.
 
 ## 5. Spool dynamics
 
@@ -303,7 +312,7 @@ flow, bypass ratio, OPR, fan diameter), FAR 33.73 (acceleration time).
 | Ground idle N1 / N2 | 21 / 60 % | 21 / 60 % | by schedule |
 | Ground idle fuel / EGT | 1 357 lb/h / 454 °C | ~1 000–1 400 / 400–480 | |
 | Cruise FL350 M0.78 N1 85 % | 4 150 lbf / TSFC 0.62 | 4 000–5 500 / 0.60–0.65 | |
-| Idle → 95 % thrust | 4.3 s | ≤ 5 s (FAR 33.73) | from ground idle |
+| Idle → 95 % thrust | 6.1 s | ≤ 5 s from flight idle (FAR 33.73) | from the lower ground idle |
 | Takeoff → idle | ~10 s | 5–10 s | decel schedule |
 | Ground start, fuel-on → idle | 27 s, EGT peak ~500 °C | 30–60 s, limit 725 °C | |
 | Flat rating | EGT held above ISA+15 | TCDS: flat rated to 30 °C SL | |
@@ -326,6 +335,9 @@ spool inertia, the start tables.
 - Steady-state accuracy is within a few percent at the calibrated points and
   degrades away from them; transients reproduce the published times and the
   qualitative shape of the published traces, not proprietary test-cell data.
+- A running engine that falls more than 8 % below idle N2 (surge cycling,
+  severe over-bleed) hands control back to the sub-idle start schedule; the
+  real FADEC's sub-idle logic is more elaborate.
 
 ---
 
@@ -472,3 +484,34 @@ torque indication failures, chip detector light.
 Limits (208B POH): torque 1 970 ft·lb, ITT 805 °C continuous / 865 transient
 / 1 090 start (2 s), Ng 101.6 %, Np 1 900 (2 090 transient), oil 85–105 psi
 (40 idle), oil temperature 99 °C.
+
+## 14. Known limitations, Part II
+
+- **Propeller**: one blade element with an effective area stands in for the
+  radial distribution; no tip losses, no compressibility beyond reporting the
+  tip Mach number, no slipstream swirl. Reverse thrust at forward speed uses
+  the vortex-ring inflow cap, which is a bound, not a measurement.
+- **Piston**: no mixture distribution between cylinders (all cylinders see
+  the same F/A), no detonation model, no induction ram, no mechanical mixture
+  cutoff lag; CHT and oil temperature are single lumped masses; the
+  carburettor-ice rate is a simple band model, not a dew-point calculation.
+- **Turboprop**: the gas generator has no separate power balance for the
+  compressor turbine (it follows the fuel-driven acceleration like the
+  turbofan's LP spool); idle shaft power is low (about 8 hp, so the
+  propeller idles near 600 rpm instead of the real ~1 000); no inlet screen
+  or inertial-separator pressure loss beyond a small bleed; the exhaust-stub
+  jet thrust is a momentum estimate.
+
+## 15. Validation tests
+
+Every number in this document is pinned by a test in `crates/engine-core/tests`:
+
+| File | Tests | What they check |
+|---|---|---|
+| `validation.rs` | 29 | turbofan: design point, takeoff, idle, cruise, monotonicity, bleed, start, FAR 33.73 accel, decel, flat rating, reverser, shutdown, cruise stability, hot/wet/hung starts, weak starter, surge recovery and cycling, flameout and relight, windmill envelope, altitude relight limit, oil starvation, fire bottle, governor failure, EGT probe, logger, spec round trip |
+| `piston.rs` | 11 | full-throttle static, rated power, 8 000 ft cruise and leaning, peak EGT and idle cutoff, idle, cold start, magneto check with fouled plug and dead mag, carburettor ice, fuel starvation and restart, climb and cruise temperatures, logger |
+| `turboprop.rs` | 12 | sized design point, takeoff, low and high idle, cruise, torque vs ITT limits hot and high, prop governing and feather, reverse, ground start, weak-battery hot start, flameout and relight, governor failure overspeed, logger |
+
+Three ignored tests (`tp_calib`, `prop_calib`) print steady points and search
+propeller geometry; run them with `cargo test -- --ignored --nocapture` when
+recalibrating.

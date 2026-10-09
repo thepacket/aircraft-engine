@@ -26,7 +26,7 @@ https://aircraftengine.fly.dev
 - Abnormals: hot, hung and wet starts, compressor surge and surge cycling,
   flameout and auto-relight, windmill restart envelope, oil leak to seizure,
   fire drill, governor failure, instrument failure; all through injectable
-  faults and 15 scripted lessons.
+  faults and 27 scripted lessons (15 turbofan, 6 piston, 6 turboprop).
 - Validation: replay any CSV flight log (own logger output or external data),
   drive the model from the logged levers or N1, overlay the logged channels
   on the charts and tabulate the errors.
@@ -53,14 +53,23 @@ aircraft-engine/
 │   │   ├── src/turboprop.rs    PT6A-114A: gas generator, free power turbine, governor, start
 │   │   ├── src/any.rs          Engine-kind dispatcher (one interface for wasm and CLI)
 │   │   ├── src/logger.rs       Fixed-rate CSV data logger
-│   │   └── tests/              validation.rs (turbofan), piston.rs, turboprop.rs
-│   ├── engine-wasm/      wasm-bindgen bindings
-│   └── engine-cli/       Native runner: `spec`, `design`, `point`, `run <script>`
+│   │   └── tests/              validation.rs (turbofan, 29), piston.rs (11), turboprop.rs (12)
+│   ├── engine-wasm/      wasm-bindgen bindings (one Simulator type for all engine kinds)
+│   └── engine-cli/       Native runner: `spec [kind]`, `design`, `point`, `run <script> [--engine kind]`
 ├── web/                  TypeScript IDE (Vite). Static output in web/dist
-│   ├── src/instruments.ts  EICAS-style SVG dials
-│   ├── src/charts.ts       Strip charts
-│   ├── src/scenario.ts     Scenario script runner
+│   ├── src/worker.ts       Simulation worker (owns the wasm engines, runs the clock)
+│   ├── src/sim.ts          Main-thread client for the worker
+│   ├── src/kinds.ts        Per-engine descriptors: dials, controls, faults, signals, readouts, lessons
+│   ├── src/signals.ts      Signal registry (chart channels, log import patterns and units)
+│   ├── src/instruments.ts  Round-dial SVG instruments
+│   ├── src/charts.ts       Strip charts with cursor and log overlay
+│   ├── src/scenario.ts     Scenario script parser and runner (timed and conditional lines)
+│   ├── src/replay.ts       CSV flight-log import, mapping, replay and comparison
+│   ├── src/share.ts        Share links (compressed state in the URL fragment)
+│   ├── src/markdown.ts     Renders docs/MODEL.md into the Model tab
 │   └── public/scenarios/   Lesson scripts
+├── docs/MODEL.md         Model documentation (equations, calibration, limits)
+├── Dockerfile, fly.toml  Static-site deployment (nginx) on Fly.io
 └── scripts/build-wasm.sh
 ```
 
@@ -84,6 +93,11 @@ cd web && npm install && npm run dev
 cd web && npm run build      # -> web/dist
 cd web && npm run preview    # or any static server, e.g. python3 -m http.server -d dist
 ```
+
+Deployment: the Dockerfile builds the wasm module and the web bundle in
+stages and serves `web/dist` with nginx on port 8080. `fly deploy --ha
+--remote-only` builds it on Fly's remote builder and runs two machines in the
+region set in `fly.toml`. Any static host works just as well.
 
 Scenario scripts (see `web/public/scenarios/`) use timed and conditional
 lines; `ctl <control> <value>` sets any control of the selected engine:
@@ -121,6 +135,13 @@ background tab) and the UI renders 30 state snapshots per second. The server
 only serves static files; nothing about a session leaves the browser. Share
 links put the scenario, spec and settings into the URL fragment; edits are
 also kept in the browser's local storage.
+
+Each engine kind is a Rust module behind the `AnyEngine` dispatcher and a
+`KindDef` descriptor in `web/src/kinds.ts`. Adding an engine means: a spec
+struct and model in `crates/engine-core`, a variant in `any.rs`, validation
+tests, and a descriptor listing its dials, controls, faults, signals,
+readouts and lessons. The spec JSON carries a `kind` tag; a document without
+one is read as a turbofan spec.
 
 ## What the models reproduce
 
