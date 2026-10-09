@@ -128,9 +128,17 @@ export class Dial {
     this.svg.appendChild(el("line", { x1: x0, y1: y0, x2: x1, y2: y1, stroke: "#ff3d3d", "stroke-width": 3.5 }));
   }
 
-  set(value: number, bug?: number): void {
+  set(value: number, bug?: number, valid = true): void {
     const d = this.opts.decimals ?? 0;
-    this.valueText.textContent = Number.isFinite(value) ? value.toFixed(d) : "---";
+    if (!valid || !Number.isFinite(value)) {
+      this.valueText.textContent = "---";
+      this.valueText.setAttribute("fill", "#ffb300");
+      this.valueBox.setAttribute("stroke", "#ffb300");
+      if (this.pointer) { this.pointer.setAttribute("x2", String(this.cx)); this.pointer.setAttribute("y2", String(this.cy - this.r + 2)); this.pointer.setAttribute("visibility", "hidden"); }
+      return;
+    }
+    if (this.pointer) this.pointer.setAttribute("visibility", "visible");
+    this.valueText.textContent = value.toFixed(d);
     if (this.pointer) {
       const a = this.angle(value);
       const [x, y] = polar(this.cx, this.cy, this.r - 2, a);

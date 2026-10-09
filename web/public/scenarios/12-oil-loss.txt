@@ -1,0 +1,11 @@
+# Oil leak in cruise: quantity falls, then pressure, then bearing damage.
+# The right call is a precautionary shutdown before the pressure drops.
+at 0    alt 10668
+at 0    mach 0.78
+at 0    running 0.62
+at 0    log on
+at 0    speed 5
+at 5    fault oil_leak 4
+at 5    note Oil leak 4 qt/min: watch OIL QTY, then OIL PRESS
+when oilp < 13  note LOW OIL PRESSURE: 90 s to bearing failure. Shut down now (fuel CUTOFF)
+at 600  end

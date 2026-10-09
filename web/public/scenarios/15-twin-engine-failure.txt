@@ -1,0 +1,14 @@
+# Twin-engine lesson (set Engines = 2): takeoff roll, engine 2 flames out.
+# Watch the asymmetry on the EICAS and the auto-relight attempt.
+at 0    engine all
+at 0    running 0
+at 0    log on
+at 5    tla 1.0
+at 15   note Engine 2 fuel supply failure at 95% N1
+at 15   engine 2
+at 15   fault fuel_pump_fail on
+at 40   note Engine 2 fuel restored: auto-relight needs N2 above 20%, use the starter
+at 40   fault fuel_pump_fail off
+at 42   starter on
+at 80   starter off
+at 100  end

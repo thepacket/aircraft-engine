@@ -1,0 +1,16 @@
+# Flameout at 15,000 ft, M0.5: the FADEC auto-relights within the envelope.
+# Then the same at 35,000 ft, M0.78: no relight above 30,000 ft until descent.
+at 0    alt 4572
+at 0    mach 0.5
+at 0    running 0.5
+at 0    log on
+at 10   note Flameout at FL150: windmilling core above 20% N2, auto-relight
+at 10   fault flameout
+at 60   alt 10668
+at 60   mach 0.78
+at 60   tla 0.62
+at 90   note Flameout at FL350: above the relight envelope
+at 90   fault flameout
+at 130  note Descend below 30,000 ft: relight
+at 130  alt 8500
+at 180  end

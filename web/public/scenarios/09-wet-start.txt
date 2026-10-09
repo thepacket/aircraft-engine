@@ -1,0 +1,10 @@
+# Wet start: igniters inoperative. Fuel flows, EGT does not rise.
+# Abort with fuel CUTOFF, then motor to clear the fuel from the combustor.
+at 0    fault ignition_fail on
+at 0    log on
+at 0    starter on
+at 18   fuel on
+at 35   note No EGT rise within 15 s of fuel on: WET START, abort
+at 40   fuel off
+at 70   starter off
+at 80   end

@@ -330,7 +330,7 @@ impl EngineSpec {
                 idle_n1_per_km: 1.2,
                 idle_n1_anti_ice_pct: 4.0,
                 tla_exponent: 1.3,
-                governor_gain_kg_s_per_pct: 0.03,
+                governor_gain_kg_s_per_pct: 0.012,
                 accel_wf_p3_vs_n2c: vec![
                     [50.0, 1.80],
                     [60.0, 1.95],

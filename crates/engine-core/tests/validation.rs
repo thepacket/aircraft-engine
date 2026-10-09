@@ -397,6 +397,36 @@ fn damaged_compressor_surges_on_a_slam_acceleration() {
 }
 
 #[test]
+fn surge_cycling_recovers_when_the_lever_is_retarded() {
+    // A damaged compressor at full lever surges repeatedly; it must not spiral
+    // into nonsense, and it must settle at idle once the lever comes back.
+    let mut e = Engine::new(spec());
+    e.faults.compressor_damage_pct = 14.0;
+    e.set_running(0.0);
+    run_for(&mut e, 3.0);
+    e.controls.tla = 1.0;
+    let mut max_egt: f64 = 0.0;
+    for _ in 0..(40.0 / 0.05) as usize {
+        e.step(0.05);
+        let st = e.state();
+        max_egt = max_egt.max(st.egt_gas_c);
+        assert!(st.t4_k < 2_500.0, "T4 {:.0} K", st.t4_k);
+        assert!(st.n2_pct > 15.0, "core collapsed to N2 {:.1}%", st.n2_pct);
+    }
+    let st = e.state();
+    assert!(st.surge_count >= 1, "expected surges with 14 points of margin lost");
+    assert!(st.surge_count <= 20, "{} surges in 40 s", st.surge_count);
+    assert!(max_egt < 1_300.0, "EGT peaked at {:.0} C", max_egt);
+    e.controls.tla = 0.0;
+    run_for(&mut e, 40.0);
+    let st = e.state();
+    assert_eq!(st.mode, Mode::Running, "mode {:?}, N1 {:.1} N2 {:.1}", st.mode, st.n1_pct, st.n2_pct);
+    assert!((st.n1_pct - 21.0).abs() < 2.0, "idle N1 {:.1}", st.n1_pct);
+    assert!(!st.surge, "still surging at idle");
+    assert!(st.egt_c < 600.0, "idle EGT {:.0} C after surge cycling", st.egt_c);
+}
+
+#[test]
 fn flameout_in_flight_auto_relights_within_the_envelope() {
     let mut e = Engine::new(spec());
     e.environment.altitude_m = 4_572.0; // 15,000 ft

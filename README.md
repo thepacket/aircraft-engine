@@ -7,7 +7,26 @@ runs inside the browser: the web server only delivers static files, and the
 simulation core is Rust compiled to WebAssembly.
 
 Default engine: **CFM International CFM56-7B26** (Boeing 737-800/900),
-26,300 lbf takeoff thrust.
+26,300 lbf takeoff thrust. Live: https://aircraftengine.fly.dev
+
+**What it teaches**
+
+- Normal operation: ground start, idle, takeoff, climb, cruise, shutdown,
+  with 737NG-style EICAS indications and the full station-by-station cycle
+  visible next to them.
+- The FADEC: N1 governing through fuel flow, Wf/Ps3 acceleration and
+  deceleration schedules, flat rating (EGT-limited N1 on a hot day), idle
+  schedules, bleed effects, reverse thrust.
+- Abnormals: hot, hung and wet starts, compressor surge and surge cycling,
+  flameout and auto-relight, windmill restart envelope, oil leak to seizure,
+  fire drill, governor failure, instrument failure; all through injectable
+  faults and 15 scripted lessons.
+- Validation: replay any CSV flight log (own logger output or external data),
+  drive the model from the logged levers or N1, overlay the logged channels
+  on the charts and tabulate the errors.
+- Twin-engine operation with per-engine lever targeting and faults.
+- The complete model documentation (equations, calibration, limits) is in
+  [docs/MODEL.md](docs/MODEL.md) and in the IDE's Model tab.
 
 ```
 aircraft-engine/
@@ -50,6 +69,18 @@ cd web && npm run build      # -> web/dist
 cd web && npm run preview    # or any static server, e.g. python3 -m http.server -d dist
 ```
 
+Scenario scripts (see `web/public/scenarios/`) use timed and conditional lines:
+
+```
+at 0     starter on
+at 18    fuel on
+when n2 >= 59   note idle reached
+at 70    tla 1.0
+when n1 >= 95   fault surge
+at 120   engine 2
+at 120   fault ignition_fail on
+```
+
 Native tools without a browser:
 
 ```bash
@@ -57,6 +88,14 @@ cargo run -p engine-cli -- point 100            # takeoff point, SL static
 cargo run -p engine-cli -- point 85 10668 0.78  # N1 85% at FL350 M0.78
 cargo run -p engine-cli -- run web/public/scenarios/01-ground-start.txt > log.csv
 ```
+
+## Architecture
+
+The simulation runs in a dedicated Web Worker (so it is not throttled in a
+background tab) and the UI renders 30 state snapshots per second. The server
+only serves static files; nothing about a session leaves the browser. Share
+links put the scenario, spec and settings into the URL fragment; edits are
+also kept in the browser's local storage.
 
 ## What the model reproduces
 
@@ -75,7 +114,7 @@ model lands on the published operating points:
 | Ground idle N1 / N2 | 21 % / 60 % | 21 % / 60 % |
 | Ground idle fuel flow, EGT | ~1,350 lb/h, ~450 °C | ~1,000–1,400 lb/h, 400–480 °C |
 | Cruise FL350 M0.78, N1 85 % | ~4,200 lbf, TSFC 0.62 | 4,000–5,500 lbf, 0.60–0.65 |
-| Idle to 95 % takeoff thrust | ~5–6 s | ≤ 5 s from flight idle (FAR 33.73) |
+| Idle to 95 % takeoff thrust | ~6 s from ground idle | ≤ 5 s from flight idle (FAR 33.73) |
 | Ground start, fuel-on to idle | ~32 s, EGT peak ~600 °C | 30–60 s, limit 725 °C |
 
 ## What is approximated
@@ -88,8 +127,9 @@ proprietary. They are replaced by:
 - a steady-state N2(N1) relation fitted to cockpit indications;
 - turbine inlet temperature fixed by core-nozzle flow continuity (the same
   physical constraint that fixes it in the real engine);
-- FADEC accel/decel schedules as N1 rate limits, with spool inertia providing
-  the transient fuel and EGT overshoot.
+- a fuel-based FADEC: proportional N1 governor with feed-forward, clamped by
+  Wf/Ps3 acceleration and deceleration schedules; the LP spool integrates the
+  resulting turbine power surplus, the HP spool follows its operating line.
 
 The whole model is in the JSON spec shown in the IDE, so every assumption can
 be inspected and changed.

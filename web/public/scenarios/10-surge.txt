@@ -1,0 +1,33 @@
+# Compressor surge: a damaged HPC (13 points of margin lost) surges on a slam
+# acceleration. Watch the surge margin readout, the EGT spike, the thrust loss
+# and the FADEC recovery (fuel to the decel floor, accel schedule re-armed).
+# Second half: the same engine advanced gently (0.05 lever per 2 s) does not surge,
+# because the fuel never runs far above the steady value.
+at 0    fault compressor_damage_pct 13
+at 0    running 0
+at 0    log on
+at 5    note Slam acceleration with a damaged compressor
+at 5    tla 1.0
+at 25   tla 0
+at 45   note Same engine, lever advanced gently: no surge
+at 47   tla 0.05
+at 49   tla 0.10
+at 51   tla 0.15
+at 53   tla 0.20
+at 55   tla 0.25
+at 57   tla 0.30
+at 59   tla 0.35
+at 61   tla 0.40
+at 63   tla 0.45
+at 65   tla 0.50
+at 67   tla 0.55
+at 69   tla 0.60
+at 71   tla 0.65
+at 73   tla 0.70
+at 75   tla 0.75
+at 77   tla 0.80
+at 79   tla 0.85
+at 81   tla 0.90
+at 83   tla 0.95
+at 85   tla 1.00
+at 100  end

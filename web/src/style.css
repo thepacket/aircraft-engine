@@ -102,3 +102,45 @@ table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); 
   #app { grid-template-columns: 1fr; grid-template-rows: 48px auto auto auto; grid-template-areas: "top" "center" "left" "right"; height: auto; }
   .dials { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---- additions: twin engines, faults, replay, docs ---- */
+.target-row { display: flex; gap: 4px; align-items: center; }
+.target-row.hidden { display: none; }
+.btn.tgt.active, .btn.focus.active { background: #1d3a4a; border-color: var(--accent); }
+.ctl-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+.toggle.small { padding: 5px; font-size: 10px; }
+.toggle.small small { font-size: 10px; }
+label.inline { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); font-size: 11px; }
+#eicas { display: flex; flex-direction: column; gap: 4px; }
+.param-row { display: grid; gap: 6px; }
+.param-row.primary { grid-template-columns: repeat(4, 1fr); }
+.param-row.secondary { grid-template-columns: repeat(4, 1fr); }
+.param-row.secondary .dial svg { max-height: 120px; }
+.twin .param-row { grid-template-columns: repeat(8, 1fr); }
+.twin .dial svg { max-width: 140px; }
+.eng-labels { display: grid; grid-template-columns: repeat(2, 1fr); text-align: center; color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+.faults { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; overflow: auto; font-size: 11px; }
+.faults label { display: flex; align-items: center; gap: 6px; color: var(--text); padding: 3px 4px; border-radius: 3px; background: var(--panel-2); }
+.faults label.active { background: #4a2020; border: 1px solid var(--red); }
+.faults input[type="number"] { width: 60px; margin-left: auto; }
+.faults .oneshot { grid-column: 1 / -1; display: flex; gap: 6px; }
+.mapping { display: grid; grid-template-columns: auto 1fr auto; gap: 3px 6px; align-items: center; font-size: 11px; overflow: auto; max-height: 240px; }
+.mapping .k { color: var(--muted); font-family: var(--mono); }
+.mapping select { font-size: 11px; padding: 2px 4px; max-width: 160px; }
+table.stats { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+table.stats th, table.stats td { text-align: right; padding: 2px 5px; border-bottom: 1px solid #16202b; }
+table.stats th:first-child, table.stats td:first-child { text-align: left; }
+.docs { font-size: 12px; }
+.docs h1 { font-size: 15px; color: var(--white); margin: 6px 0; }
+.docs h2 { font-size: 13px; color: var(--accent); margin: 14px 0 4px; text-transform: none; letter-spacing: 0; }
+.docs h3 { font-size: 12px; color: var(--text); margin: 10px 0 3px; }
+.docs table { border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0; }
+.docs th, .docs td { border: 1px solid var(--line); padding: 2px 5px; text-align: left; }
+.docs pre { white-space: pre-wrap; }
+.docs ul, .docs ol { padding-left: 18px; }
+.charts .chart { display: flex; flex-direction: column; flex: 1; min-height: 100px; position: relative; }
+.charts .chart select { position: absolute; right: 6px; bottom: 3px; z-index: 2; font-size: 10px; padding: 1px 3px; background: #0a0e13cc; border-color: #2a3644; }
+.charts .chart canvas { flex: 1; min-height: 90px; height: auto; }
+.readout .v.warn { color: var(--amber); }
+.warning.amber { background: #4a3a10; color: #ffe0a3; border-color: var(--amber); }
+.eng-tag { font-family: var(--mono); color: var(--muted); margin-right: 4px; }

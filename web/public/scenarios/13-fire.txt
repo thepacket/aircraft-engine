@@ -1,0 +1,13 @@
+# Engine fire drill: fire warning, thrust lever idle, fuel lever CUTOFF, bottle.
+# The bottle will not extinguish the fire while fuel is still on.
+at 0    running 0.6
+at 0    log on
+at 5    fault fire on
+at 5    note ENGINE FIRE. Thrust lever idle
+at 8    tla 0
+at 12   note Bottle with fuel still RUN: no effect
+at 12   bottle
+at 20   note Fuel lever CUTOFF, then bottle
+at 20   fuel off
+at 24   bottle
+at 60   end

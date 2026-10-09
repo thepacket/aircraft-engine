@@ -1,177 +1,100 @@
-// Thin typed wrapper around the WebAssembly engine core.
-import init, { Simulator } from "./wasm/engine_wasm.js";
+// Main-thread client for the simulation worker.
+import type { DesignSizing, EngineSpec, EngineState, EngineTarget } from "./types";
 
-export type Mode = "off" | "motoring" | "starting" | "running" | "shutdown";
+type StateListener = (states: EngineState[]) => void;
 
-export interface Station {
-  id: string;
-  label: string;
-  tt_k: number;
-  pt_pa: number;
-  w_kg_s: number;
-}
+export class SimClient {
+  private worker: Worker;
+  private listeners: StateListener[] = [];
+  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
+  private nextId = 1;
+  spec!: EngineSpec;
+  specJson = "";
+  defaultSpecJson = "";
+  sizing!: DesignSizing;
+  version = "";
+  engines: number;
+  latest: EngineState[] = [];
 
-export interface Nozzle {
-  npr: number;
-  exit_velocity_m_s: number;
-  exit_static_pressure_pa: number;
-  exit_temperature_k: number;
-  required_area_m2: number;
-  choked: boolean;
-}
-
-export interface CycleResult {
-  stations: Station[];
-  w2_kg_s: number;
-  w13_kg_s: number;
-  w25_kg_s: number;
-  wf_kg_s: number;
-  w5_kg_s: number;
-  bypass_ratio: number;
-  fan_pressure_ratio: number;
-  booster_pressure_ratio: number;
-  hpc_pressure_ratio: number;
-  overall_pressure_ratio: number;
-  hpt_pressure_ratio: number;
-  lpt_pressure_ratio: number;
-  t4_k: number;
-  egt_k: number;
-  core_nozzle: Nozzle;
-  bypass_nozzle: Nozzle;
-  fan_power_w: number;
-  hpc_power_w: number;
-  hpt_power_w: number;
-  lpt_power_w: number;
-  thrust_bypass_n: number;
-  thrust_core_n: number;
-  ram_drag_n: number;
-  net_thrust_n: number;
-  tsfc: number;
-  thermal_efficiency: number;
-  propulsive_efficiency: number;
-  overall_efficiency: number;
-  combustion: boolean;
-}
-
-export interface EngineState {
-  time_s: number;
-  mode: Mode;
-  controls: { tla: number; fuel_lever: boolean; starter: boolean };
-  environment: { altitude_m: number; mach: number; delta_isa_k: number };
-  inlet: {
-    ambient: { altitude_m: number; temperature_k: number; pressure_pa: number; density_kg_m3: number; speed_of_sound_m_s: number };
-    mach: number;
-    true_airspeed_m_s: number;
-    tt2_k: number;
-    pt2_pa: number;
-    theta: number;
-    delta: number;
-  };
-  n1_pct: number;
-  n2_pct: number;
-  n1_rpm: number;
-  n2_rpm: number;
-  n1_corrected_pct: number;
-  n2_corrected_pct: number;
-  n1_command_pct: number;
-  n1_dot_pct_s: number;
-  n2_dot_pct_s: number;
-  egt_c: number;
-  egt_gas_c: number;
-  t4_k: number;
-  fuel_flow_kg_s: number;
-  fuel_flow_pph: number;
-  fuel_flow_steady_kg_s: number;
-  fuel_used_kg: number;
-  thrust_n: number;
-  thrust_lbf: number;
-  tsfc_lb_lbf_h: number;
-  oil_pressure_psi: number;
-  oil_temperature_c: number;
-  oil_quantity_qt: number;
-  vib_n1: number;
-  vib_n2: number;
-  starter_engaged: boolean;
-  ignition: boolean;
-  lit: boolean;
-  takeoff_timer_s: number;
-  run_time_s: number;
-  cycle: CycleResult;
-  warnings: string[];
-  logger_rows: number;
-  logger_enabled: boolean;
-}
-
-export interface EngineSpec {
-  name: string;
-  manufacturer: string;
-  application: string;
-  limits: {
-    n1_max_pct: number;
-    n2_max_pct: number;
-    egt_takeoff_c: number;
-    egt_max_continuous_c: number;
-    egt_start_c: number;
-    oil_pressure_min_psi: number;
-    oil_pressure_caution_psi: number;
-    oil_temp_max_continuous_c: number;
-    oil_temp_max_transient_c: number;
-    vib_advisory: number;
-  };
-  oil: { capacity_qt: number; full_qt: number };
-  design_point: { n1_100pct_rpm: number; n2_100pct_rpm: number };
-  [k: string]: unknown;
-}
-
-export interface DesignSizing {
-  core_nozzle_area_m2: number;
-  bypass_nozzle_area_m2: number;
-  t4_takeoff_k: number;
-  takeoff: CycleResult;
-}
-
-export class Sim {
-  private constructor(public readonly raw: Simulator) {}
-
-  static async create(specJson = ""): Promise<Sim> {
-    await init();
-    return new Sim(new Simulator(specJson));
+  private constructor(engines: number) {
+    this.engines = engines;
+    this.worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
   }
 
-  static version(): string {
-    return Simulator.version();
+  static create(engines: number, spec?: string): Promise<SimClient> {
+    return new Promise((resolve, reject) => {
+      const c = new SimClient(engines);
+      let ready = false;
+      c.worker.onmessage = (ev: MessageEvent) => {
+        const m = ev.data;
+        switch (m.type) {
+          case "meta": {
+            c.spec = JSON.parse(m.spec);
+            c.specJson = m.spec;
+            c.sizing = JSON.parse(m.sizing);
+            c.version = m.version;
+            c.defaultSpecJson = m.defaultSpec;
+            if (m.id !== undefined) c.settle(m.id, { spec: c.spec, sizing: c.sizing });
+            if (!ready) { ready = true; resolve(c); }
+            break;
+          }
+          case "state": {
+            c.latest = (m.states as string[]).map((s) => JSON.parse(s) as EngineState);
+            for (const l of c.listeners) l(c.latest);
+            break;
+          }
+          case "csv": c.settle(m.id, m.csv); break;
+          case "error": {
+            if (m.id !== undefined) c.fail(m.id, new Error(m.message));
+            else { console.error("worker:", m.message); if (!ready) reject(new Error(m.message)); }
+            break;
+          }
+        }
+      };
+      c.worker.onerror = (e) => { console.error(e); if (!ready) reject(e); };
+      c.worker.postMessage({ type: "init", engines, spec });
+    });
   }
 
-  defaultSpecJson(): string {
-    return Simulator.default_spec_json();
+  private settle(id: number, v: unknown): void { const p = this.pending.get(id); if (p) { this.pending.delete(id); p.resolve(v); } }
+  private fail(id: number, e: unknown): void { const p = this.pending.get(id); if (p) { this.pending.delete(id); p.reject(e); } }
+  private request<T>(msg: Record<string, unknown>): Promise<T> {
+    const id = this.nextId++;
+    return new Promise<T>((resolve, reject) => {
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+      this.worker.postMessage({ ...msg, id });
+    });
   }
 
-  spec(): EngineSpec {
-    return JSON.parse(this.raw.spec_json()) as EngineSpec;
-  }
+  onState(l: StateListener): void { this.listeners.push(l); }
 
-  specJson(): string {
-    return this.raw.spec_json();
+  cmd(name: string, args: unknown[] = [], target: EngineTarget = "all"): void {
+    this.worker.postMessage({ type: "cmd", target, name, args });
   }
-
-  sizing(): DesignSizing {
-    return JSON.parse(this.raw.sizing_json()) as DesignSizing;
+  setSpeed(v: number): void { this.worker.postMessage({ type: "speed", value: v }); }
+  setPaused(v: boolean): void { this.worker.postMessage({ type: "pause", value: v }); }
+  reset(): void { this.worker.postMessage({ type: "reset" }); }
+  setEngines(n: number): void { this.engines = n; this.worker.postMessage({ type: "engines", count: n }); }
+  async setSpec(json: string): Promise<{ spec: EngineSpec; sizing: DesignSizing }> {
+    const r = await this.request<{ spec: EngineSpec; sizing: DesignSizing }>({ type: "spec", json });
+    this.specJson = JSON.stringify(r.spec, null, 2);
+    return r;
   }
-
-  /** Throws with a readable message when the JSON is invalid. */
-  setSpecJson(json: string): void {
-    this.raw.set_spec_json(json);
-  }
-
-  state(): EngineState {
-    return JSON.parse(this.raw.state_json()) as EngineState;
-  }
-
-  step(dt: number): void {
-    this.raw.step(dt);
-  }
-
-  time(): number {
-    return this.raw.time();
-  }
+  csv(engine: number): Promise<string> { return this.request<string>({ type: "csv", engine }); }
+  setFaults(target: EngineTarget, patch: Record<string, unknown>): void { this.worker.postMessage({ type: "faults", target, patch }); }
+  clearFaults(target: EngineTarget): void { this.worker.postMessage({ type: "faults", target, patch: null }); }
+  // Convenience wrappers
+  setThrottle(v: number, t: EngineTarget = "all"): void { this.cmd("set_throttle", [v], t); }
+  setFuelLever(on: boolean, t: EngineTarget = "all"): void { this.cmd("set_fuel_lever", [on], t); }
+  setStarter(on: boolean, t: EngineTarget = "all"): void { this.cmd("set_starter", [on], t); }
+  setAntiIce(on: boolean, t: EngineTarget = "all"): void { this.cmd("set_anti_ice", [on], t); }
+  setPackBleed(on: boolean, t: EngineTarget = "all"): void { this.cmd("set_pack_bleed", [on], t); }
+  setReverser(on: boolean, t: EngineTarget = "all"): void { this.cmd("set_reverser", [on], t); }
+  setN1Demand(pct: number, t: EngineTarget = "all"): void { this.cmd("set_n1_demand", [pct], t); }
+  setEnvironment(alt: number, mach: number, disa: number): void { this.cmd("set_environment", [alt, mach, disa]); }
+  setRunning(tla: number, t: EngineTarget = "all"): void { this.cmd("set_running", [tla], t); }
+  loggerStart(): void { this.cmd("logger_start"); }
+  loggerStop(): void { this.cmd("logger_stop"); }
+  loggerClear(): void { this.cmd("logger_clear"); }
+  loggerRate(hz: number): void { this.cmd("logger_set_rate", [hz]); }
 }

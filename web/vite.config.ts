@@ -11,6 +11,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    fs: { allow: [".."] },
     headers: {
       // Not strictly required (no SharedArrayBuffer), but harmless and lets
       // the page opt into cross-origin isolation later if a worker needs it.

@@ -151,7 +151,9 @@ pub fn fuel_for_t4(spec: &EngineSpec, w: f64, t3: f64, t4: f64) -> f64 {
 /// Inverse of [`fuel_for_t4`].
 pub fn t4_for_fuel(spec: &EngineSpec, w: f64, t3: f64, wf: f64) -> f64 {
     let d = &spec.design_point;
-    (wf * d.eta_burner * d.fuel_lhv_j_kg + w * CP_GAS * t3) / ((w + wf) * CP_GAS)
+    let t4 = (wf * d.eta_burner * d.fuel_lhv_j_kg + w * CP_GAS * t3) / ((w + wf) * CP_GAS);
+    // Beyond roughly stoichiometric the extra fuel does not burn
+    t4.min(2_400.0)
 }
 
 /// Operating condition inputs to the cycle.

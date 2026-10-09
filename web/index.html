@@ -18,6 +18,8 @@
           <span class="sim-time" id="sim-time">t = 0.0 s</span>
         </div>
         <div class="topbar-right">
+          <label>Engines <select id="engine-count"><option value="1">1</option><option value="2">2</option></select></label>
+          <label>Units <select id="units"><option value="si">SI</option><option value="imp">Imperial</option></select></label>
           <label>Speed
             <select id="sim-speed">
               <option value="0.25">0.25×</option>
@@ -26,16 +28,27 @@
               <option value="2">2×</option>
               <option value="5">5×</option>
               <option value="10">10×</option>
+              <option value="50">50×</option>
             </select>
           </label>
           <button id="btn-pause" class="btn">Pause</button>
-          <button id="btn-reset" class="btn btn-warn">Reset (cold &amp; dark)</button>
+          <button id="btn-share" class="btn" title="Copy a link that reproduces this scenario, spec and settings">Share link</button>
+          <button id="btn-reset" class="btn btn-warn">Reset</button>
         </div>
       </header>
 
       <aside id="left">
         <section class="panel">
-          <h2>Controls</h2>
+          <h2>Controls <span class="hint" id="target-hint"></span></h2>
+          <div class="target-row hidden" id="target-row">
+            <span class="hint">Lever target</span>
+            <button class="btn small tgt active" data-target="all">BOTH</button>
+            <button class="btn small tgt" data-target="0">ENG 1</button>
+            <button class="btn small tgt" data-target="1">ENG 2</button>
+            <span class="hint" style="margin-left:auto">Display</span>
+            <button class="btn small focus active" data-focus="0">ENG 1</button>
+            <button class="btn small focus" data-focus="1">ENG 2</button>
+          </div>
           <div class="ctl-grid">
             <button id="btn-starter" class="toggle">STARTER<br /><small>OFF</small></button>
             <button id="btn-fuel" class="toggle">FUEL LEVER<br /><small>CUTOFF</small></button>
@@ -48,66 +61,105 @@
             <button class="btn small" data-tla="55">Approach</button>
             <button class="btn small" data-tla="80">Climb</button>
             <button class="btn small" data-tla="100">TO/GA</button>
+            <label class="inline"><input type="checkbox" id="n1-hold" /> N1 hold <input id="n1-hold-val" type="number" value="85" min="20" max="104" step="0.5" style="width:58px" />%</label>
+          </div>
+          <div class="ctl-grid three">
+            <button id="btn-reverser" class="toggle small">REVERSER<br /><small>STOWED</small></button>
+            <button id="btn-antiice" class="toggle small">ENG ANTI-ICE<br /><small>OFF</small></button>
+            <button id="btn-pack" class="toggle small">PACK BLEED<br /><small>OFF</small></button>
           </div>
           <div class="env-grid">
-            <label>Altitude (ft) <input id="alt-ft" type="number" value="0" step="500" min="-1000" max="45000" /></label>
+            <label>Alt (<span class="alt-unit">ft</span>) <input id="alt" type="number" value="0" step="500" /></label>
             <label>Mach <input id="mach" type="number" value="0" step="0.02" min="0" max="0.9" /></label>
             <label>ΔISA (°C) <input id="disa" type="number" value="0" step="1" min="-40" max="40" /></label>
           </div>
           <div class="preset-row">
             <button id="btn-jump-idle" class="btn small">Jump to idle</button>
             <button id="btn-jump-cruise" class="btn small">Jump to cruise</button>
+            <button id="btn-cold" class="btn small">Cold &amp; dark</button>
           </div>
         </section>
 
         <section class="panel grow">
           <div class="tabs">
             <button class="tab active" data-tab="scenario">Scenario</button>
-            <button class="tab" data-tab="spec">Engine spec</button>
+            <button class="tab" data-tab="spec">Spec</button>
+            <button class="tab" data-tab="faults">Faults</button>
+            <button class="tab" data-tab="replay">Replay</button>
+            <button class="tab" data-tab="docs">Model</button>
             <button class="tab" data-tab="help">Help</button>
           </div>
+
           <div class="tab-body" id="tab-scenario">
             <div class="row">
               <select id="scenario-preset"></select>
               <button id="btn-scenario-run" class="btn">Run</button>
               <button id="btn-scenario-stop" class="btn" disabled>Stop</button>
+              <button id="btn-scenario-open" class="btn small">Open…</button>
+              <button id="btn-scenario-save" class="btn small">Save</button>
             </div>
             <textarea id="scenario-text" spellcheck="false"></textarea>
             <div class="scenario-status" id="scenario-status">Idle</div>
           </div>
+
           <div class="tab-body hidden" id="tab-spec">
             <div class="row">
               <button id="btn-spec-apply" class="btn">Apply &amp; re-size</button>
-              <button id="btn-spec-revert" class="btn">Revert to CFM56-7B26</button>
-              <button id="btn-spec-download" class="btn">Download</button>
+              <button id="btn-spec-revert" class="btn small">Revert to CFM56-7B26</button>
+              <button id="btn-spec-open" class="btn small">Open…</button>
+              <button id="btn-spec-download" class="btn small">Save</button>
             </div>
             <textarea id="spec-text" spellcheck="false"></textarea>
             <div class="scenario-status" id="spec-status"></div>
           </div>
+
+          <div class="tab-body hidden" id="tab-faults">
+            <div class="row"><span class="hint">Applied to the lever target. One-shots fire once.</span><button id="btn-faults-clear" class="btn small" style="margin-left:auto">Clear all</button></div>
+            <div class="faults" id="faults"></div>
+          </div>
+
+          <div class="tab-body hidden" id="tab-replay">
+            <div class="row">
+              <button id="btn-replay-open" class="btn">Open log CSV…</button>
+              <button id="btn-replay-own" class="btn small" title="Load the logger's own CSV as a reference (model vs itself)">Use logger CSV</button>
+              <button id="btn-replay-run" class="btn" disabled>Replay</button>
+              <button id="btn-replay-stop" class="btn" disabled>Stop</button>
+            </div>
+            <div class="scenario-status" id="replay-status">No log loaded. A log is any CSV with a time column; columns are mapped below. Public flight data: NASA DASHlink "Sample Flight Data" (737-class, N1/N2/EGT/FF).</div>
+            <div class="mapping" id="replay-mapping"></div>
+            <table class="stats" id="replay-stats"></table>
+          </div>
+
+          <div class="tab-body hidden" id="tab-docs">
+            <div class="help docs" id="docs"></div>
+          </div>
+
           <div class="tab-body hidden" id="tab-help">
             <div class="help">
-              <h3>What you are looking at</h3>
-              <p>A two-spool high-bypass turbofan (default: CFM56-7B26, Boeing 737-800) simulated entirely in your browser. The server only delivered this page; nothing runs remotely.</p>
               <h3>Start the engine</h3>
               <ol>
                 <li>Press <b>STARTER</b>. N2 rises as the pneumatic starter motors the core.</li>
-                <li>At about 25% N2, set the <b>FUEL LEVER</b> to RUN. Ignition fires, EGT rises after light-off.</li>
+                <li>At about 25% N2, set the <b>FUEL LEVER</b> to RUN. Light-off follows after ~2 s.</li>
                 <li>The starter cuts out at 56% N2; the engine stabilises at ground idle (N1 ≈ 21%, N2 ≈ 60%).</li>
               </ol>
               <h3>Scenario script</h3>
-              <pre>at 0    starter on
-at 18   fuel on
-at 70   tla 1.0      # 0..1
-at 100  tla 0
-at 120  alt 10668    # metres
-at 120  mach 0.78
-at 130  log on
-at 200  end</pre>
-              <p>Commands: <code>starter on|off</code>, <code>fuel on|off</code>, <code>tla x</code>, <code>alt m</code>, <code>mach x</code>, <code>isa dK</code>, <code>running tla</code> (jump to a stabilised point), <code>log on|off</code>, <code>speed x</code>, <code>note text</code>, <code>end</code>.</p>
-              <h3>Engine spec</h3>
-              <p>Every number the model uses is in the JSON spec. Change the rated thrust, pressure ratios, efficiencies or limits, press Apply, and the design point is re-sized (nozzle areas and takeoff T4 are derived, not typed).</p>
-              <h3>Model notes</h3>
-              <p>Steady state is a station-by-station cycle with the turbine inlet temperature fixed by core-nozzle continuity. Transients use FADEC accel/decel schedules, spool inertia and sensor lags. Published ratings, speeds and limits are reproduced; proprietary component maps are replaced by calibrated power laws.</p>
+              <pre>at 0     starter on
+at 18    fuel on
+when n2 >= 59   note idle reached
+at 70    tla 1.0           # 0..1
+when n1 >= 95   fault surge
+at 100   tla 0
+at 120   engine 2          # or 1, all
+at 120   fault ignition_fail on
+at 200   end</pre>
+              <p>Timed lines: <code>at &lt;s&gt; &lt;cmd&gt;</code>. Conditional lines: <code>when &lt;signal&gt; &lt;op&gt; &lt;value&gt; &lt;cmd&gt;</code>, armed at the preceding <code>at</code> time, fire once. Signals: n1, n2, egt, ff, thrust, oilp, oilt, vib, t4, sm_hpc, alt, mach… (any chart channel).</p>
+              <p>Commands: <code>engine 1|2|all</code>, <code>starter</code>, <code>fuel</code>, <code>tla x</code>, <code>n1 pct|off</code>, <code>alt m</code>, <code>mach x</code>, <code>isa dK</code>, <code>running tla</code>, <code>antiice</code>, <code>pack</code>, <code>reverser</code>, <code>fault name [value]</code>, <code>bottle</code>, <code>log on|off</code>, <code>speed x</code>, <code>note text</code>, <code>end</code>.</p>
+              <h3>Faults</h3>
+              <p>starter_inop, starter_weak, starter_early_cutout, ignition_fail, start_fuel_factor (1 = normal), fuel_pump_fail, oil_leak_qt_per_min, fire, n1_governor_fail, compressor_damage_pct, fod, egt_probe_fail, reverser_stuck; one-shots: surge, flameout, fire_bottle.</p>
+              <h3>Replay</h3>
+              <p>Load a CSV flight log, map its columns, and the simulator is driven by the logged levers (or follows the logged N1). Logged channels are overlaid on the charts as dashed lines and the errors are tabulated.</p>
+              <h3>Sharing</h3>
+              <p><b>Share link</b> puts the scenario, a modified spec and the settings into the URL fragment: nothing is sent to the server. Scenario and spec edits are also kept in this browser.</p>
             </div>
           </div>
         </section>
@@ -116,28 +168,17 @@ at 200  end</pre>
       <main id="center">
         <section class="panel eicas">
           <h2>Engine indications <span class="hint">(737NG EICAS style)</span></h2>
-          <div class="dials primary">
-            <div class="dial" id="dial-n1"></div>
-            <div class="dial" id="dial-egt"></div>
-            <div class="dial" id="dial-n2"></div>
-            <div class="dial" id="dial-ff"></div>
-          </div>
-          <div class="dials secondary">
-            <div class="dial" id="dial-oilp"></div>
-            <div class="dial" id="dial-oilt"></div>
-            <div class="dial" id="dial-oilq"></div>
-            <div class="dial" id="dial-vib"></div>
-          </div>
+          <div id="eicas"></div>
           <div id="warnings" class="warnings"></div>
         </section>
         <section class="panel">
-          <h2>Performance <span class="hint">(not shown in a real cockpit)</span></h2>
+          <h2>Performance <span class="hint" id="perf-hint">(not shown in a real cockpit)</span></h2>
           <div class="readouts" id="readouts"></div>
         </section>
         <section class="panel">
           <h2>Cycle stations</h2>
           <table class="stations" id="stations">
-            <thead><tr><th>Station</th><th></th><th>Tt (K)</th><th>Tt (°C)</th><th>Pt (kPa)</th><th>W (kg/s)</th></tr></thead>
+            <thead><tr><th>Station</th><th></th><th>Tt</th><th>Pt</th><th>W</th></tr></thead>
             <tbody></tbody>
           </table>
         </section>
@@ -148,27 +189,24 @@ at 200  end</pre>
           <h2>Data logger</h2>
           <div class="row">
             <label>Rate <select id="log-rate">
-              <option value="1">1 Hz</option>
-              <option value="5">5 Hz</option>
-              <option value="10" selected>10 Hz</option>
-              <option value="20">20 Hz</option>
-              <option value="50">50 Hz</option>
+              <option value="1">1 Hz</option><option value="5">5 Hz</option><option value="10" selected>10 Hz</option><option value="20">20 Hz</option><option value="50">50 Hz</option>
             </select></label>
             <button id="btn-log" class="btn">Start logging</button>
-            <button id="btn-log-clear" class="btn">Clear</button>
-            <button id="btn-log-download" class="btn">Download CSV</button>
+            <button id="btn-log-clear" class="btn small">Clear</button>
+            <button id="btn-log-download" class="btn small">Download CSV</button>
           </div>
           <div class="scenario-status" id="log-status">0 rows</div>
         </section>
         <section class="panel grow charts">
-          <h2>Strip charts <span class="hint">last 90 s</span></h2>
-          <canvas id="chart-speeds"></canvas>
-          <canvas id="chart-egt"></canvas>
-          <canvas id="chart-ff"></canvas>
-          <canvas id="chart-thrust"></canvas>
+          <h2>Strip charts <label class="inline hint">window <select id="chart-window"><option value="30">30 s</option><option value="90" selected>90 s</option><option value="300">5 min</option><option value="900">15 min</option></select></label></h2>
+          <div class="chart"><select class="chart-sel"></select><canvas id="chart-0"></canvas></div>
+          <div class="chart"><select class="chart-sel"></select><canvas id="chart-1"></canvas></div>
+          <div class="chart"><select class="chart-sel"></select><canvas id="chart-2"></canvas></div>
+          <div class="chart"><select class="chart-sel"></select><canvas id="chart-3"></canvas></div>
         </section>
       </aside>
     </div>
+    <input type="file" id="file-input" accept=".txt,.json,.csv" hidden />
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

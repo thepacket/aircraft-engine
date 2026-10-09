@@ -245,6 +245,7 @@ pub struct Engine {
     seized: bool,
     reverser_pos: f64,
     surge_timer: f64,
+    surge_recovery_s: f64,
     surge_count: u32,
     flameout_count: u32,
     hung_timer: f64,
@@ -338,6 +339,7 @@ impl Engine {
             seized: false,
             reverser_pos: 0.0,
             surge_timer: 0.0,
+            surge_recovery_s: 0.0,
             surge_count: 0,
             flameout_count: 0,
             hung_timer: 0.0,
@@ -605,6 +607,12 @@ impl Engine {
                     // Flameout: FADEC auto-relight (ignition on, sub-idle schedule)
                     self.mode = Mode::Starting;
                     self.fuel_on_since = Some(self.time_s);
+                } else if self.n2 < s.n2_idle_pct * st - 8.0 {
+                    // Dropped well below idle (surge cycling, severe over-bleed):
+                    // the FADEC falls back to its sub-idle (start) fuel schedule.
+                    self.mode = Mode::Starting;
+                    self.fuel_on_since = Some(self.time_s - sp.light_off_delay_s);
+                    self.surge_timer = 0.0;
                 }
             }
             Mode::Shutdown => {
@@ -720,7 +728,16 @@ impl Engine {
                 let demand = ss.wf_kg_s + fd.governor_gain_kg_s_per_pct * (self.n1_cmd - self.n1);
                 let n2c_pct = self.n2 / st;
                 self.wf_max = interp(&fd.accel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0;
-                self.wf_min = (interp(&fd.decel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0).max(fd.min_fuel_kg_s);
+                // The decel floor protects against lean blow-out; it can never ask
+                // for more than the steady fuel (that would be over-fuelling).
+                self.wf_min = (interp(&fd.decel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0).max(fd.min_fuel_kg_s.min(ss.wf_kg_s));
+                // After a surge the FADEC re-arms the accel schedule gradually
+                // (no slam re-acceleration into a stalled compressor).
+                if self.surge_recovery_s > 0.0 {
+                    self.surge_recovery_s -= h;
+                    let f = 1.0 - self.surge_recovery_s / 4.0;
+                    self.wf_max = ss.wf_kg_s + (self.wf_max - ss.wf_kg_s) * f.clamp(0.0, 1.0);
+                }
                 self.wf_cmd = demand;
                 let mut target = demand.clamp(self.wf_min, self.wf_max.max(self.wf_min));
                 // Surge recovery: the FADEC pulls fuel to the deceleration floor
@@ -740,7 +757,7 @@ impl Engine {
                 let w1 = (self.n1 / 100.0 * spec.design_point.n1_100pct_rpm * TAU / 60.0).max(5.0);
                 let mut a1 = p_excess / (s.lp_inertia_kg_m2 * w1);
                 if self.surge_timer > 0.0 {
-                    a1 -= 0.12 * w1; // loss of turbine work during the surge
+                    a1 -= 0.06 * w1; // loss of turbine work during the surge
                 }
                 self.n1 += a1 / (spec.design_point.n1_100pct_rpm * TAU / 60.0) * 100.0 * h;
                 self.n1 = self.n1.max(n1_wm);
@@ -759,6 +776,7 @@ impl Engine {
                 self.sm_fan = spec.bleed.fan_surge_margin_pct * (0.6 + 0.4 * base.n1c.min(1.0)) - if f.fod { 12.0 } else { 0.0 };
                 if self.surge_timer <= 0.0 && (self.sm_hpc < 0.0 || f.trigger_surge) {
                     self.surge_timer = 1.5;
+                    self.surge_recovery_s = 4.0;
                     self.surge_count += 1;
                 }
                 // --- Flameout ---

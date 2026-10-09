@@ -1,0 +1,9 @@
+# Hung start: the starter drops out at 30% N2 (duct pressure loss). The engine
+# lights but stalls below idle: turbine torque equals rotor drag.
+at 0    fault starter_early_cutout on
+at 0    log on
+at 0    starter on
+at 18   fuel on
+when n2 >= 30  note Starter cut out early: N2 stalls, EGT rising slowly. Abort: fuel CUTOFF
+at 60   fuel off
+at 100  end

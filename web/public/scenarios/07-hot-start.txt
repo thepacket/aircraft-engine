@@ -1,0 +1,11 @@
+# Hot start: a rich start fuel schedule (fuel metering fault) drives EGT past
+# the 725 C start limit. Procedure: fuel lever to CUTOFF, keep motoring to cool.
+at 0    fault start_fuel_factor 1.8
+at 0    log on
+at 0    starter on
+at 18   note Fuel lever RUN: watch EGT rise toward the 725 C start limit
+at 18   fuel on
+when egt >= 725  note HOT START: EGT limit exceeded. Fuel lever CUTOFF, motor 30 s
+when egt >= 725  fuel off
+at 90   starter off
+at 100  end

@@ -1,0 +1,17 @@
+# Bleed effects: anti-ice and packs raise EGT and cost thrust at the same N1.
+# Then a landing roll with reverse thrust.
+at 0    running 1.0
+at 0    log on
+at 10   note Engine anti-ice on: EGT up, thrust down, idle N1 up
+at 10   antiice on
+at 25   note Pack bleed on as well
+at 25   pack on
+at 40   antiice off
+at 40   pack off
+at 50   tla 0
+at 60   note Landing roll: reverser deploy, max reverse (N1 limited to 85%)
+at 60   reverser on
+at 63   tla 1.0
+at 75   tla 0
+at 78   reverser off
+at 90   end
