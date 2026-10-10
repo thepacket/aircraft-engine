@@ -79,7 +79,6 @@ textarea { flex: 1; min-height: 160px; width: 100%; resize: none; background: #0
 .help code { font-family: var(--mono); background: #0a0e13; padding: 1px 4px; border-radius: 3px; }
 .eicas { background: #06090d; }
 .dials { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.dials.secondary .dial svg { max-height: 120px; }
 .dial { display: flex; justify-content: center; }
 .dial svg { width: 100%; max-width: 200px; height: auto; }
 .warnings { min-height: 18px; display: flex; flex-wrap: wrap; gap: 6px; }
@@ -115,7 +114,6 @@ label.inline { display: inline-flex; gap: 4px; align-items: center; color: var(-
 .param-row { display: grid; gap: 6px; }
 .param-row.primary { grid-template-columns: repeat(4, 1fr); }
 .param-row.secondary { grid-template-columns: repeat(4, 1fr); }
-.param-row.secondary .dial svg { max-height: 120px; }
 .twin .param-row { grid-template-columns: repeat(8, 1fr); }
 .twin .dial svg { max-width: 140px; }
 .eng-labels { display: grid; grid-template-columns: repeat(2, 1fr); text-align: center; color: var(--muted); font-size: 11px; letter-spacing: 1px; }
