@@ -85,7 +85,7 @@ textarea { flex: 1; min-height: 160px; width: 100%; resize: none; background: #0
 .warning { background: #4a1a1a; color: #ffb3b3; border: 1px solid var(--red); border-radius: 4px; padding: 2px 8px; font-family: var(--mono); font-size: 11px; }
 .readouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .readout { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
-.readout .k { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; }
+.readout .k { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
 .readout .v { font-family: var(--mono); font-size: 15px; color: var(--white); }
 .readout .u { color: var(--muted); font-size: 10px; margin-left: 3px; }
 table.stations { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
