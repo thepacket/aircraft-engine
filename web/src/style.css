@@ -27,9 +27,10 @@
 html, body { margin: 0; height: 100%; background: var(--floor); color: var(--text); font-family: var(--sans); font-size: 13px; }
 #app {
   display: grid;
-  grid-template-columns: 340px 1fr 360px;
+  --right-w: 360px;
+  grid-template-columns: 340px 1fr 10px var(--right-w);
   grid-template-rows: 54px 1fr;
-  grid-template-areas: "top top top" "left center right";
+  grid-template-areas: "top top top top" "left center split right";
   height: 100vh;
   gap: 12px;
   padding: 10px;
@@ -75,7 +76,12 @@ html, body { margin: 0; height: 100%; background: var(--floor); color: var(--tex
 #left { grid-area: left; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 #center { grid-area: center; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
 #center .panel { flex-shrink: 0; }
-#right { grid-area: right; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+#right { grid-area: right; display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+#splitter { grid-area: split; cursor: col-resize; border-radius: 3px; background: linear-gradient(90deg, #15181b, #2f3338 50%, #15181b); box-shadow: inset 0 1px 0 #ffffff14; position: relative; margin: 20px -2px; }
+#splitter::before { content: ""; position: absolute; left: 3px; top: 50%; width: 4px; height: 36px; margin-top: -18px; border-radius: 2px; background: repeating-linear-gradient(#5a6069 0 2px, transparent 2px 5px); }
+#splitter:hover, #splitter.dragging { background: linear-gradient(90deg, #15181b, #4a5058 50%, #15181b); }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing * { pointer-events: none; }
 
 /* ---- switches and knobs ---- */
 .btn {
@@ -220,10 +226,11 @@ table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); 
 .charts h2 select { font-size: 10px; padding: 1px 4px; }
 
 @media (max-width: 1300px) {
-  #app { grid-template-columns: 300px 1fr 300px; }
+  #app { grid-template-columns: 300px 1fr 10px var(--right-w); }
 }
 @media (max-width: 1000px) {
   #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "top" "center" "left" "right"; height: auto; }
+  #splitter { display: none; }
   #topbar { flex-wrap: wrap; padding: 8px 14px; row-gap: 8px; }
   .topbar-right { flex-wrap: wrap; }
   .dials { grid-template-columns: repeat(2, 1fr); }

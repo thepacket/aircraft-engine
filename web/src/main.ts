@@ -1,6 +1,7 @@
 import { SimClient } from "./sim";
 import type { AnyState, AnySpec, EngineTarget } from "./types";
 import { Dial } from "./instruments";
+import { initSplitter } from "./splitter";
 import { StripChart } from "./charts";
 import { parseScenario, parseOnOff, ScenarioRunner } from "./scenario";
 import { signal, setActiveSignals, hasSignal } from "./signals";
@@ -23,6 +24,7 @@ const lsSet = (k: string, v: string): void => { try { localStorage.setItem(k, v)
 const lsDel = (k: string): void => { try { localStorage.removeItem(k); } catch { /* ignore */ } };
 
 async function main(): Promise<void> {
+  initSplitter();
   // ---- Restore settings and share link -----------------------------------
   const shared = await decodeShare(location.hash);
   let engines = shared?.engines ?? (parseInt(lsGet(LS.engines) ?? "1", 10) || 1);
