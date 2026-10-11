@@ -122,7 +122,7 @@
           <div class="tab-body hidden" id="tab-help">
             <div class="help">
               <h3>Three engines</h3>
-              <p>Pick the engine in the top bar. <b>Turbofan</b> (CFM56-7B26): starter, fuel lever at 25% N2, idle at N1 21%. <b>Piston</b> (O-360): mixture rich, 2-3 primer shots cold, magnetos BOTH, crank; mag check at 1,800 rpm. <b>Turboprop</b> (PT6A-114A): prop lever full, starter, condition lever to LOW IDLE at 12-15% Ng, starter off at idle.</p>
+              <p>Pick the engine in the top bar. <b>Turbofan</b> (CFM56-7B26, or the LEAP-1B28 of the 737 MAX): starter, fuel lever at 25% N2, idle at N1 21% (LEAP: 19%). <b>Piston</b> (O-360): mixture rich, 2-3 primer shots cold, magnetos BOTH, crank; mag check at 1,800 rpm. <b>Turboprop</b> (PT6A-114A): prop lever full, starter, condition lever to LOW IDLE at 12-15% Ng, starter off at idle.</p>
               <h3>Scenario script</h3>
               <pre>at 0     starter on
 at 18    fuel on
@@ -132,11 +132,15 @@ when n1 >= 95   fault surge
 at 100   tla 0
 at 120   engine 2          # or 1, all
 at 120   fault ignition_fail on
+at 18    watch egt < 725    # must hold to the end
+at 90    check n1 >= 20     # evaluated when the line fires
 at 200   end</pre>
               <p>Timed lines: <code>at &lt;s&gt; &lt;cmd&gt;</code>. Conditional lines: <code>when &lt;signal&gt; &lt;op&gt; &lt;value&gt; &lt;cmd&gt;</code>, armed at the preceding <code>at</code> time, fire once. Signals: n1, n2, egt, ff, thrust, oilp, oilt, vib, t4, sm_hpc, alt, mach… (any chart channel).</p>
-              <p>Commands: <code>engine 1|2|all</code>, <code>ctl &lt;control&gt; &lt;value&gt;</code> (any control of the engine: tla, mixture, magnetos, power_lever, prop_lever, condition_lever, carb_heat…), <code>starter</code>, <code>fuel on|off</code> (fuel lever / mixture / condition lever), <code>tla x</code> (main lever), <code>n1 pct|off</code>, <code>alt m</code>, <code>mach x</code>, <code>isa dK</code>, <code>humidity x</code>, <code>running level</code>, <code>antiice</code>, <code>pack</code>, <code>reverser</code>, <code>fault name [value]</code>, <code>bottle</code>, <code>log on|off</code>, <code>speed x</code>, <code>note text</code>, <code>end</code>.</p>
+              <p>Commands: <code>engine 1|2|all</code>, <code>ctl &lt;control&gt; &lt;value&gt;</code> (any control of the engine: tla, mixture, magnetos, power_lever, prop_lever, condition_lever, carb_heat…), <code>starter</code>, <code>fuel on|off</code> (fuel lever / mixture / condition lever), <code>tla x</code> (main lever), <code>n1 pct|off</code>, <code>alt m</code>, <code>mach x</code>, <code>isa dK</code>, <code>humidity x</code>, <code>running level</code>, <code>antiice</code>, <code>pack</code>, <code>reverser</code>, <code>fault name [value]</code>, <code>bottle</code>, <code>log on|off</code>, <code>speed x</code>, <code>note text</code>, <code>check &lt;signal&gt; &lt;op&gt; &lt;value&gt;</code>, <code>watch &lt;signal&gt; &lt;op&gt; &lt;value&gt;</code>, <code>end</code>. Checkpoints are graded: green when passed, red when failed, with the measured value in the status line.</p>
               <h3>Faults</h3>
               <p>starter_inop, starter_weak, starter_early_cutout, ignition_fail, start_fuel_factor (1 = normal), fuel_pump_fail, oil_leak_qt_per_min, fire, n1_governor_fail, compressor_damage_pct, fod, egt_probe_fail, reverser_stuck; one-shots: surge, flameout, fire_bottle.</p>
+              <h3>Parametric sweep</h3>
+              <p>The sweep display unit plots any signal against altitude, Mach, ΔISA or lever position at steady state, with up to six values of a second variable as separate curves. Points are computed on a settled copy of engine 1; the variables not swept stay at the current environment and lever. CSV exports the curves.</p>
               <h3>Layout</h3>
               <p>Drag the grip left of the strip charts to resize the charts column, and the grip under the engine indications to resize them: the dials rearrange to make the most of the space. Double-click a grip to go back to the automatic layout. Both positions are remembered in this browser. While a scenario runs, the editor shows the current line in white and armed <code>when</code> lines in amber.</p>
               <h3>Replay</h3>

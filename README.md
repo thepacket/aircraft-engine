@@ -11,7 +11,8 @@ engines, with virtual cockpit instrumentation and a data logger. Everything
 runs inside the browser: the web server only delivers static files, and the
 simulation core is Rust compiled to WebAssembly.
 
-Three engine families, each validated against its published data. Try it at
+Three engine families and four engines, each validated against its published
+data. Try it at
 https://aircraftengine.fly.dev, no install needed.
 
 > **Educational use only.** This is a teaching tool. It is not a certified
@@ -25,6 +26,7 @@ https://aircraftengine.fly.dev, no install needed.
 | Engine | Type | Aircraft | Rating |
 |---|---|---|---|
 | CFM International CFM56-7B26 | two-spool high-bypass turbofan | Boeing 737-800/900 | 26,300 lbf |
+| CFM International LEAP-1B28 | two-spool high-bypass turbofan (BPR 8.6, OPR ~40) | Boeing 737 MAX 8/9 | 29,317 lbf |
 | Lycoming O-360-A4M | 4-cylinder carburetted piston, fixed-pitch prop | Piper PA-28-181 Archer, Cessna 172 class | 180 hp |
 | Pratt & Whitney Canada PT6A-114A | free-turbine turboprop, constant-speed prop | Cessna 208B Grand Caravan | 675 shp |
 
@@ -40,6 +42,12 @@ https://aircraftengine.fly.dev, no install needed.
   flameout and auto-relight, windmill restart envelope, oil leak to seizure,
   fire drill, governor failure, instrument failure; all through injectable
   faults and 27 scripted lessons (15 turbofan, 6 piston, 6 turboprop).
+- Assessment: `check` and `watch` lines in a lesson script set pass/fail
+  criteria on any signal (EGT under the start limit, idle N1 in range, 95 %
+  thrust within the FAR 33.73 time) and the IDE reports the results.
+- Parametric sweeps: steady-state thrust, TSFC, EGT or any other signal
+  against altitude, Mach, ISA deviation or lever position, with a second
+  variable as curve family, plotted and exportable as CSV.
 - Validation: replay any CSV flight log (own logger output or external data),
   drive the model from the logged levers or N1, overlay the logged channels
   on the charts and tabulate the errors.
@@ -66,7 +74,7 @@ aircraft-engine/
 │   │   ├── src/turboprop.rs    PT6A-114A: gas generator, free power turbine, governor, start
 │   │   ├── src/any.rs          Engine-kind dispatcher (one interface for wasm and CLI)
 │   │   ├── src/logger.rs       Fixed-rate CSV data logger
-│   │   └── tests/              validation.rs (turbofan, 29), piston.rs (11), turboprop.rs (12)
+│   │   └── tests/              validation.rs (CFM56, 29), leap.rs (LEAP-1B, 6), piston.rs (11), turboprop.rs (12)
 │   ├── engine-wasm/      wasm-bindgen bindings (one Simulator type for all engine kinds)
 │   └── engine-cli/       Native runner: `spec [kind]`, `design`, `point`, `run <script> [--engine kind]`
 ├── web/                  TypeScript IDE (Vite). Static output in web/dist
@@ -77,7 +85,8 @@ aircraft-engine/
 │   ├── src/instruments.ts  Round-dial SVG instruments and the adaptive dial grid
 │   ├── src/splitter.ts     Draggable splitters (charts column width, indications height)
 │   ├── src/charts.ts       Strip charts with cursor and log overlay
-│   ├── src/scenario.ts     Scenario script parser and runner (timed and conditional lines)
+│   ├── src/scenario.ts     Scenario script parser and runner (timed and conditional lines, checkpoints)
+│   ├── src/sweep.ts        Parametric sweeps (steady-state curves on a display unit)
 │   ├── src/replay.ts       CSV flight-log import, mapping, replay and comparison
 │   ├── src/share.ts        Share links (compressed state in the URL fragment)
 │   ├── src/markdown.ts     Renders docs/MODEL.md into the Model tab
@@ -158,7 +167,8 @@ static host such as GitHub Pages, Netlify or an S3 bucket, since the build
 uses relative asset paths.
 
 Scenario scripts (see `web/public/scenarios/`) use timed and conditional
-lines; `ctl <control> <value>` sets any control of the selected engine:
+lines; `ctl <control> <value>` sets any control of the selected engine, and
+`check` / `watch` lines grade the run:
 
 ```
 at 0     starter on
@@ -168,6 +178,9 @@ at 70    tla 1.0
 when n1 >= 95   fault surge
 at 120   engine 2
 at 120   fault ignition_fail on
+# checkpoints: check is evaluated when its line fires, watch must hold to the end
+at 18    watch egt < 725
+at 90    check n1 >= 20
 # piston / turboprop controls through ctl:
 at 0     ctl magnetos 3
 at 2     ctl primer 3
@@ -203,13 +216,22 @@ Double-click a grip to return to the automatic layout.
 
 While a scenario runs, the editor highlights the line of the last event
 applied in white and the conditional `when` lines that are armed and
-waiting in amber, and scrolls to keep the current line in view.
+waiting in amber, and scrolls to keep the current line in view. Checkpoint
+lines turn green or red as they pass or fail, with the measured value and
+time in the status line, and the summary stays until the script is edited.
+
+The parametric sweep display unit computes steady-state operating points
+on a settled copy of engine 1 (the running engines are untouched) and plots
+any signal against altitude, Mach, ISA deviation or lever position, with
+up to six values of a second variable as separate curves. Variables not
+swept stay at the current environment and lever. Results download as CSV.
 
 Native tools without a browser:
 
 ```bash
 cargo run -p engine-cli -- point 100            # turbofan takeoff point, SL static
 cargo run -p engine-cli -- point 85 10668 0.78  # N1 85% at FL350 M0.78
+cargo run -p engine-cli -- point 100 --engine leap1b   # same for the LEAP-1B28
 cargo run -p engine-cli -- spec piston          # default spec JSON of an engine kind
 cargo run -p engine-cli -- run web/public/scenarios/01-ground-start.txt > log.csv
 cargo run -p engine-cli -- run web/public/scenarios/piston-01-cold-start.txt --engine piston > log.csv
@@ -262,6 +284,15 @@ model lands on the published operating points:
 | Cruise FL350 M0.78, N1 85 % | ~4,200 lbf, TSFC 0.62 | 4,000–5,500 lbf, 0.60–0.65 |
 | Idle to 95 % takeoff thrust | ~6 s from ground idle | ≤ 5 s from flight idle (FAR 33.73) |
 | Ground start, fuel-on to idle | ~32 s, EGT peak ~600 °C | 30–60 s, limit 725 °C |
+
+**Turbofan (LEAP-1B28):** the same model with the LEAP-1B's published
+rating, geometry, 100 % speeds, bypass ratio 8.6, pressure-ratio class and
+limits (FAA TCDS E00088EN, 737 MAX FCOM, CFM data); the calibration knobs
+start from the CFM56-7B26 and are adjusted for the higher-pressure,
+two-stage-HPT cycle. Checked points: rated thrust 29,317 lbf by sizing;
+takeoff TSFC ~0.28 lb/lbf/h and EGT ~900 °C (limit 1,038 °C); cruise FL350
+M0.78 TSFC ~0.55, about 11 % below the CFM56-7B26 (published ~15 %); ground
+start and FAR 33.73 acceleration within limits.
 
 ## What is approximated
 
