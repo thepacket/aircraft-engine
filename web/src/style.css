@@ -81,7 +81,13 @@ html, body { margin: 0; height: 100%; background: var(--floor); color: var(--tex
 #splitter::before { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 40px; margin: -20px 0 0 -3px; border-radius: 3px; background: linear-gradient(90deg, #15181b, #4a5058 50%, #15181b); box-shadow: inset 0 1px 0 #ffffff22, 0 1px 2px #000a; opacity: 0.8; transition: opacity 0.15s, background 0.15s; }
 #splitter::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2px; height: 22px; margin: -11px 0 0 -1px; background: repeating-linear-gradient(#8b939c 0 2px, transparent 2px 5px); }
 #splitter:hover::before, #splitter.dragging::before { opacity: 1; background: linear-gradient(90deg, #1d2024, #5a6069 50%, #1d2024); }
-body.resizing { cursor: col-resize; user-select: none; }
+#hsplitter { position: absolute; left: 0; right: 0; bottom: -12px; height: 12px; cursor: row-resize; z-index: 5; }
+#hsplitter::before { content: ""; position: absolute; top: 50%; left: 50%; height: 6px; width: 40px; margin: -3px 0 0 -20px; border-radius: 3px; background: linear-gradient(#15181b, #4a5058 50%, #15181b); box-shadow: inset 1px 0 0 #ffffff22, 1px 0 2px #000a; opacity: 0.8; transition: opacity 0.15s, background 0.15s; }
+#hsplitter::after { content: ""; position: absolute; top: 50%; left: 50%; height: 2px; width: 22px; margin: -1px 0 0 -11px; background: repeating-linear-gradient(90deg, #8b939c 0 2px, transparent 2px 5px); }
+#hsplitter:hover::before, #hsplitter.dragging::before { opacity: 1; background: linear-gradient(#1d2024, #5a6069 50%, #1d2024); }
+body.resizing { user-select: none; }
+body.resizing:has(#splitter.dragging) { cursor: col-resize; }
+body.resizing:has(#hsplitter.dragging) { cursor: row-resize; }
 body.resizing * { pointer-events: none; }
 
 /* ---- switches and knobs ---- */
@@ -193,7 +199,11 @@ table.stats th:first-child, table.stats td:first-child { text-align: left; }
 .du h2 { color: var(--accent); letter-spacing: 1.5px; text-shadow: none; }
 .du .hint { color: #5c6670; }
 .eicas.du { box-shadow: inset 0 0 0 3px #1d2024, inset 0 0 0 4px #000, inset 0 0 50px #050a0e, 0 3px 8px #000a; }
-#eicas { display: flex; flex-direction: column; gap: 4px; }
+.eicas { height: var(--eicas-h, auto); }
+#eicas { display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 4px; flex: 1; min-height: 0; }
+#eicas.twin { grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); }
+.param-row .dial { min-height: 0; min-width: 0; }
+.param-row .dial svg { width: 100%; height: 100%; max-width: 200px; }
 .param-row { display: grid; gap: 6px; }
 .param-row.primary { grid-template-columns: repeat(4, 1fr); }
 .param-row.secondary { grid-template-columns: repeat(4, 1fr); }
@@ -231,7 +241,8 @@ table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); 
 }
 @media (max-width: 1000px) {
   #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "top" "center" "left" "right"; height: auto; }
-  #splitter { display: none; }
+  #splitter, #hsplitter { display: none; }
+  .eicas { height: auto; }
   #topbar { flex-wrap: wrap; padding: 8px 14px; row-gap: 8px; }
   .topbar-right { flex-wrap: wrap; }
   .dials { grid-template-columns: repeat(2, 1fr); }
