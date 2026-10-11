@@ -170,13 +170,14 @@ input[type="checkbox"] { accent-color: var(--green); }
 .row label { color: var(--muted); display: flex; gap: 6px; align-items: center; }
 textarea { flex: 1; min-height: 160px; width: 100%; resize: none; background: var(--screen); color: var(--green); border: none; border-radius: 2px; font-family: var(--mono); font-size: 12px; padding: 6px; line-height: 1.45; tab-size: 4; text-shadow: 0 0 4px #39d35366; }
 textarea:focus { outline: 1px solid #1f6b2e; }
-/* editor with a highlight layer behind the (transparent) textarea */
+/* editor with a highlight layer over the textarea: it redraws the current and
+   waiting lines in their own colours, pixel-aligned over the textarea text */
 .editor { position: relative; flex: 1; min-height: 160px; display: flex; background: var(--screen); min-width: 0; }
 .editor textarea { position: relative; z-index: 1; background: transparent; min-height: 0; }
-.editor-hl { position: absolute; inset: 0; overflow: hidden; pointer-events: none; padding: 6px 16px 6px 6px; font-family: var(--mono); font-size: 12px; line-height: 1.45; tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; color: transparent; }
+.editor-hl { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; padding: 6px 16px 6px 6px; font-family: var(--mono); font-size: 12px; line-height: 1.45; tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; color: transparent; }
 .editor-hl .ln { border-radius: 2px; }
-.editor-hl .ln.waiting { background: #ffb3001c; box-shadow: inset 3px 0 0 #ffb30088; }
-.editor-hl .ln.current { background: #39d35330; box-shadow: inset 3px 0 0 var(--green); }
+.editor-hl .ln.waiting { color: var(--amber); background: #2a2008; box-shadow: inset 3px 0 0 var(--amber); }
+.editor-hl .ln.current { color: #fff; font-weight: 700; background: #124a1e; box-shadow: inset 3px 0 0 #fff, 0 0 8px #39d35366; text-shadow: 0 0 6px #ffffffaa; }
 .scenario-status { color: var(--green); font-family: var(--mono); font-size: 11px; min-height: 14px; white-space: pre-wrap; opacity: 0.85; }
 .scenario-status.err { color: var(--amber); opacity: 1; }
 .help { overflow: auto; color: #cfe0d4; line-height: 1.45; font-size: 12px; }
