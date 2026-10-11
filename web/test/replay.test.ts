@@ -46,9 +46,10 @@ for (const kind of ["turbofan", "piston", "turboprop", "turbojet", "turboshaft"]
       checked++;
     }
     assert.ok(checked >= 5, `${kind}: only ${checked} signals round-tripped`);
-    // Every importable signal whose native column is in the log must be mapped
+    // Every importable signal whose native column (named after the signal's
+    // own unit, e.g. fuel_pressure_psi) is in the log must be mapped to it
     for (const sg of measuredSignals()) {
-      const native = table.columns.find((c) => sg.patterns![0].test(c));
+      const native = table.columns.find((c) => sg.patterns!.some((p) => p.test(c)) && suffixUnit(c) === sg.unitSi);
       if (native) assert.equal(map.columns[sg.key], native, `${kind}: native column ${native} for ${sg.key} not mapped (${map.notes[sg.key] ?? "no note"})`);
     }
     assert.ok(s.measured.thrust === undefined || Math.abs(s.measured.thrust) < 200, `${kind}: thrust ${s.measured.thrust} kN looks like newtons`);
