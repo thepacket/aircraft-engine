@@ -25,6 +25,8 @@ const LS = { scenario: "ae.scenario", spec: "ae.spec", units: "ae.units", engine
 interface LessonRun {
   at: string; engine: string; preset: string; lesson: string;
   passed: number; failed: number; elapsed: number;
+  /** Stopped before the script ended: `skipped` checks never ran */
+  incomplete?: boolean; skipped?: number;
   checks: { line: number; kind: string; text: string; pass: boolean | null; detail: string }[];
 }
 const lsGet = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -54,7 +56,8 @@ async function main(): Promise<void> {
     client = await SimClient.create(engines);
   }
   // Restore the engine preset chosen last time (a custom spec restores itself above)
-  const storedPreset = lsGet(LS.kind);
+  // A share link names its engine; otherwise the one chosen last time.
+  const storedPreset = shared?.preset ?? lsGet(LS.kind);
   if (!initialSpec && storedPreset && storedPreset !== client.preset) {
     try { await client.setKind(storedPreset); } catch (e) { console.warn("stored engine preset rejected", e); }
   }
@@ -245,17 +248,20 @@ async function main(): Promise<void> {
     engines = parseInt((e.target as HTMLSelectElement).value, 10) === 2 ? 2 : 1;
     lsSet(LS.engines, String(engines)); client.setEngines(engines); charts.forEach((c) => c.setEngines(engines)); buildEicas(); refreshTargetRow();
   });
-  const applyKind = (k: string, specJson?: string): Promise<void> => (specJson ? client.setSpec(specJson) : client.setKind(k)).then((r) => {
+  const applyKind = (k: string, specJson?: string): Promise<void> => (specJson ? client.setSpec(specJson) : client.setKind(k)).then(async (r) => {
     spec = r.spec; kind = kindDef(client.kind, spec); setActiveSignals(kind.signals);
     lsSet(LS.kind, client.preset || kind.kind); if (specJson) lsSet(LS.spec, client.specJson); else lsDel(LS.spec);
     $<HTMLSelectElement>("engine-kind").value = client.preset || kind.kind;
     setTitle(); buildEicas(); buildControls(); buildFaultPanel(); buildCharts(); buildLessons(); specText.value = client.specJson; showSizing(); sweep.rebuild();
     setN1Hold(false, NaN, "all"); env = { alt: 0, mach: 0, disa: 0, humidity: 0.4 }; refreshEnvInputs(); pushEnv(); scenarioStop(); replayStop();
     logTable = null; mapping = null; mappingBox.innerHTML = ""; statsTable.innerHTML = ""; btnReplayRun.disabled = true;
+    // The lesson list now belongs to the new engine: load its first lesson,
+    // unless the script was edited by hand (then it stays and is labelled so).
+    if (!lessonEdited) await loadPreset(presetSel.value);
   });
   $<HTMLSelectElement>("engine-kind").addEventListener("change", (e) => void applyKind((e.target as HTMLSelectElement).value));
   $("btn-share").addEventListener("click", async () => {
-    const s = await encodeShare({ scenario: scenarioText.value, spec: specText.value.trim() !== client.defaultSpecJson.trim() ? specText.value : undefined, engines, units: unitSystem(), charts: charts.map((c) => c.channel) });
+    const s = await encodeShare({ scenario: scenarioText.value, preset: client.preset || kind.kind, spec: specText.value.trim() !== client.defaultSpecJson.trim() ? specText.value : undefined, engines, units: unitSystem(), charts: charts.map((c) => c.channel) });
     const url = `${location.origin}${location.pathname}#s=${s}`;
     history.replaceState(null, "", `#s=${s}`);
     try { await navigator.clipboard.writeText(url); $("sim-time").textContent = "link copied"; } catch { prompt("Share link", url); }
@@ -381,15 +387,16 @@ async function main(): Promise<void> {
     const s = r.summary;
     if (!r.results.length) return "";
     const lines = r.results.map((c) => `${c.pass === null ? "…" : c.pass ? "✓" : "✗"} line ${c.line}: ${c.kind} ${c.text}${c.detail ? " (" + c.detail + ")" : ""}`);
-    return `checks: ${s.passed} passed, ${s.failed} failed${s.pending ? `, ${s.pending} open` : ""}\n${lines.join("\n")}`;
+    const skipped = r.interrupted ? r.skipped : 0;
+    return `checks: ${s.passed} passed, ${s.failed} failed${s.pending ? `, ${s.pending} open` : ""}${r.interrupted ? ` — stopped early, ${skipped} not reached` : ""}\n${lines.join("\n")}`;
   };
   const scenarioStop = (): void => {
     if (runner) {
       runner.stop(); finishedRunner = runner;
-      if (runner.results.length) {
+      if (runner.results.length || (runner.interrupted && runner.skipped)) {
         const s = runner.summary;
-        lastNote = `Finished: ${s.passed} of ${s.passed + s.failed} checks passed`;
-        recordRun({ at: new Date().toISOString(), engine: spec.name, preset: client.preset || kind.kind, lesson: lessonLabel(), passed: s.passed, failed: s.failed, elapsed: Math.round(runner.elapsed), checks: runner.results.map((r) => ({ line: r.line, kind: r.kind, text: r.text, pass: r.pass, detail: r.detail })) });
+        lastNote = runner.interrupted ? `Stopped early: ${s.passed} of ${s.passed + s.failed} checks passed, ${runner.skipped + s.pending} not completed` : `Finished: ${s.passed} of ${s.passed + s.failed} checks passed`;
+        recordRun({ at: new Date().toISOString(), engine: spec.name, preset: client.preset || kind.kind, lesson: lessonLabel(), passed: s.passed, failed: s.failed, elapsed: Math.round(runner.elapsed), incomplete: runner.interrupted || undefined, skipped: runner.interrupted ? runner.skipped + s.pending : undefined, checks: runner.results.map((r) => ({ line: r.line, kind: r.kind, text: r.text, pass: r.pass, detail: r.detail })) });
       }
     }
     runner = null; btnRun.disabled = false; btnStop.disabled = true;
@@ -403,13 +410,13 @@ async function main(): Promise<void> {
   const renderRuns = (): void => {
     if (!runs.length) { resultsSummary.textContent = "No graded runs yet. Lessons with check / watch lines are recorded here when they finish."; resultsBox.innerHTML = ""; return; }
     const best = new Map<string, number>();
-    for (const r of runs) { const k = `${r.preset}|${r.lesson}`; const score = r.passed / Math.max(1, r.passed + r.failed); best.set(k, Math.max(best.get(k) ?? 0, score)); }
-    const clean = runs.filter((r) => r.failed === 0).length;
+    for (const r of runs) { const k = `${r.preset}|${r.lesson}`; const score = r.incomplete ? 0 : r.passed / Math.max(1, r.passed + r.failed); best.set(k, Math.max(best.get(k) ?? 0, score)); }
+    const clean = runs.filter((r) => r.failed === 0 && !r.incomplete).length;
     resultsSummary.textContent = `${runs.length} run${runs.length === 1 ? "" : "s"}, ${clean} with every check passed, ${best.size} lesson${best.size === 1 ? "" : "s"} attempted.`;
     resultsBox.innerHTML = [...runs].reverse().map((r, i) => {
       const total = r.passed + r.failed;
       const details = r.checks.map((c) => `<span class="${c.pass ? "ok" : "ko"}">${c.pass === null ? "…" : c.pass ? "✓" : "✗"}</span> line ${c.line}: ${esc(c.kind)} ${esc(c.text)}${c.detail ? " (" + esc(c.detail) + ")" : ""}`).join("\n");
-      return `<div class="run${r.failed ? " failed" : ""}" data-i="${i}"><span class="when">${esc(r.at.replace("T", " ").slice(0, 16))} · ${esc(r.engine)} · t+${r.elapsed} s</span><span class="score">${r.passed}/${total}</span><span class="lesson">${esc(r.lesson)}</span><div class="details hidden">${details}</div></div>`;
+      return `<div class="run${r.failed ? " failed" : ""}${r.incomplete ? " incomplete" : ""}" data-i="${i}"><span class="when">${esc(r.at.replace("T", " ").slice(0, 16))} · ${esc(r.engine)} · t+${r.elapsed} s</span><span class="score">${r.passed}/${total}${r.incomplete ? ` <small>stopped early, ${r.skipped ?? 0} not run</small>` : ""}</span><span class="lesson">${esc(r.lesson)}</span><div class="details hidden">${details}</div></div>`;
     }).join("");
   };
   const recordRun = (run: LessonRun): void => { runs.push(run); saveRuns(); renderRuns(); };
@@ -418,8 +425,8 @@ async function main(): Promise<void> {
   $("btn-results-json").addEventListener("click", () => download("lesson-results.json", JSON.stringify(runs, null, 2), "application/json"));
   $("btn-results-csv").addEventListener("click", () => {
     const q = (v: unknown): string => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const rows = ["at,engine,preset,lesson,score,elapsed_s,line,kind,text,pass,detail"];
-    for (const r of runs) for (const c of r.checks) rows.push([r.at, r.engine, r.preset, r.lesson, `${r.passed}/${r.passed + r.failed}`, r.elapsed, c.line, c.kind, c.text, c.pass === null ? "" : c.pass ? "pass" : "fail", c.detail].map(q).join(","));
+    const rows = ["at,engine,preset,lesson,score,complete,elapsed_s,line,kind,text,pass,detail"];
+    for (const r of runs) for (const c of r.checks) rows.push([r.at, r.engine, r.preset, r.lesson, `${r.passed}/${r.passed + r.failed}`, r.incomplete ? "no" : "yes", r.elapsed, c.line, c.kind, c.text, c.pass === null ? "" : c.pass ? "pass" : "fail", c.detail].map(q).join(","));
     download("lesson-results.csv", rows.join("\n"), "text/csv");
   });
   renderRuns();
@@ -504,7 +511,7 @@ async function main(): Promise<void> {
   let logTable: LogTable | null = null;
   let mapping: Mapping | null = null;
   let replay: Replay | null = null;
-  let replayT0 = 0;
+  let replayT0 = NaN, replayResetFrom = 0;
   let replayActive = false;
   let lastCompareT = -1;
   const comparison = new Comparison();
@@ -564,13 +571,19 @@ async function main(): Promise<void> {
     if (first.alt !== undefined || first.mach !== undefined) setEnv(first.alt, first.mach, first.isa);
     const core = first.measured.n2 ?? first.measured.ng ?? first.measured.rpm;
     if (core !== undefined && core > (first.measured.rpm !== undefined ? 400 : 45)) jumpRunning(first.lever ?? 0, "all");
-    replayT0 = client.latest[0]?.time_s ?? 0; lastCompareT = -1; replayActive = true;
+    // The reset is applied by the worker: take the clock origin from the
+    // first state that comes back after it, not from the pre-reset time.
+    replayResetFrom = client.latest[0]?.time_s ?? 0; replayT0 = NaN; lastCompareT = -1; replayActive = true;
     btnReplayRun.disabled = true; btnReplayStop.disabled = false;
     replayStatus.classList.remove("err"); replayStatus.textContent = `Replaying ${replay.duration.toFixed(0)} s of log…`;
   });
   btnReplayStop.addEventListener("click", replayStop);
   const replayTick = (states: AnyState[]): void => {
     if (!replayActive || !replay) return;
+    if (Number.isNaN(replayT0)) {
+      if (states[0].time_s >= replayResetFrom && replayResetFrom > 0.5) return; // reset not applied yet
+      replayT0 = states[0].time_s;
+    }
     const t = states[0].time_s - replayT0;
     if (t > replay.duration) { replayStatus.textContent = `Replay finished (${replay.duration.toFixed(0)} s).`; replayStop(); return; }
     const s = replay.sample(Math.max(t, 0));

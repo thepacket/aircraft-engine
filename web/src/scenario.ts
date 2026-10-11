@@ -131,8 +131,22 @@ export class ScenarioRunner {
 
   constructor(private events: ScenarioEvent[], private h: ScenarioHandlers, private read: (signal: string) => number) {}
 
-  start(simTime: number): void { this.t0 = simTime; this.lastT = simTime; this.active = true; this.current = ""; this.currentLine = 0; this.results = []; this.watches = []; for (const e of this.events) e.fired = false; }
-  stop(): void { this.finish(); }
+  /** True when the run was stopped before every event fired */
+  interrupted = false;
+  start(simTime: number): void { this.t0 = simTime; this.lastT = simTime; this.active = true; this.interrupted = false; this.current = ""; this.currentLine = 0; this.results = []; this.watches = []; for (const e of this.events) e.fired = false; }
+  /**
+   * Stop early. Open watches stay open (they were not held to the end) and the
+   * run is marked interrupted, so it cannot be graded as a complete run.
+   */
+  stop(): void {
+    if (!this.active) return;
+    this.interrupted = !this.events.every((e) => e.fired);
+    for (const w of this.watches) if (w.result.pass === null) w.result.detail = `stopped at t+${this.elapsed.toFixed(0)} s`;
+    this.watches = [];
+    this.active = false;
+  }
+  /** Checks and watches the script still had ahead of it when it was stopped */
+  get skipped(): number { return this.events.filter((e) => !e.fired && (e.cmd === "check" || e.cmd === "watch")).length; }
   /** Close the open watches (they pass if never violated) and stop. */
   private finish(): void {
     for (const w of this.watches) if (w.result.pass === null) { w.result.pass = true; w.result.detail = `held to t+${this.elapsed.toFixed(0)} s`; }
@@ -161,7 +175,12 @@ export class ScenarioRunner {
       this.apply(e);
       if (!this.active) return;
     }
-    // Watches: record the first violation and the worst value seen
+    this.evalWatches(rel);
+    if (this.events.every((e) => e.fired)) this.finish();
+  }
+
+  /** Watches: record the first violation and the worst value seen */
+  private evalWatches(rel: number): void {
     for (const w of this.watches) {
       const v = this.read(w.cond.signal);
       if (!Number.isFinite(v)) continue;
@@ -169,7 +188,6 @@ export class ScenarioRunner {
       const worse = w.worst === undefined || Number.isNaN(w.worst) || (/[<]/.test(w.cond.op) ? v > w.worst : /[>]/.test(w.cond.op) ? v < w.worst : Math.abs(v - w.cond.value) > Math.abs(w.worst - w.cond.value));
       if (bad && (w.result.pass !== false || worse)) { w.worst = v; w.worstT = rel; w.result.pass = false; w.result.detail = `${w.cond.signal} = ${fmtNum(v)} at t+${rel.toFixed(0)} s`; }
     }
-    if (this.events.every((e) => e.fired)) this.finish();
   }
 
   private apply(e: ScenarioEvent): void {
@@ -213,7 +231,9 @@ export class ScenarioRunner {
         this.watches.push({ result, cond: c, worst: NaN, worstT: 0 });
         break;
       }
-      case "end": this.h.end(); this.finish(); break;
+      // The ending tick still counts for the watches, so a limit busted on the
+      // same tick as `end` is not missed.
+      case "end": this.evalWatches(this.lastT - this.t0); this.h.end(); this.finish(); break;
     }
   }
 }

@@ -208,6 +208,8 @@ table.stats th:first-child, table.stats td:first-child { text-align: left; }
 .results .run .when { color: var(--muted); }
 .results .run .score { font-weight: 700; color: var(--green); text-align: right; }
 .results .run.failed .score { color: var(--red); }
+.results .run.incomplete .score { color: var(--amber, #e0a830); }
+.results .run .score small { font-size: 0.8em; opacity: 0.8; }
 .results .run .lesson { grid-column: 1 / -1; color: var(--accent); }
 .results .run .details { grid-column: 1 / -1; white-space: pre-wrap; color: #9fb8a6; border-top: 1px solid #0f3316; padding-top: 3px; margin-top: 2px; }
 .results .run .details .ok { color: var(--green); } .results .run .details .ko { color: var(--red); }

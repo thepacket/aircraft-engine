@@ -2,7 +2,7 @@
 // deflate-compressed and base64url-encoded into the URL fragment, so the
 // server never sees them and nothing is stored anywhere.
 
-export interface ShareState { scenario?: string; spec?: string; engines?: number; units?: string; charts?: string[] }
+export interface ShareState { scenario?: string; preset?: string; spec?: string; engines?: number; units?: string; charts?: string[] }
 
 async function pump(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
