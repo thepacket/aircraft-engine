@@ -241,8 +241,10 @@ async function main(): Promise<void> {
 
   // ---- Screenshot -----------------------------------------------------------
   const btnShot = $<HTMLButtonElement>("btn-screenshot");
-  btnShot.addEventListener("click", async () => {
-    btnShot.disabled = true;
+  let shotBusy = false;
+  const takeScreenshot = async (label = ""): Promise<void> => {
+    if (shotBusy) return;
+    shotBusy = true; btnShot.disabled = true;
     const simTime = $("sim-time");
     const prev = simTime.textContent;
     try {
@@ -258,23 +260,24 @@ async function main(): Promise<void> {
             const src = document.getElementById(ta.id) as HTMLTextAreaElement | null;
             const cs = getComputedStyle(src ?? ta);
             const box = doc.createElement("div");
-            box.textContent = src?.value ?? ta.value;
             box.style.cssText = `white-space:pre-wrap;overflow-wrap:break-word;overflow:hidden;box-sizing:border-box;font-family:${cs.fontFamily};font-size:${cs.fontSize};line-height:${cs.lineHeight};color:${cs.color};padding:${cs.padding};width:${cs.width};height:${cs.height};flex:${cs.flex};min-height:0;background:transparent;tab-size:4`;
-            const inner = doc.createElement("div"); inner.style.cssText = `margin-top:-${src?.scrollTop ?? 0}px`; inner.textContent = box.textContent; box.textContent = ""; box.appendChild(inner);
+            const inner = doc.createElement("div"); inner.style.cssText = `margin-top:-${src?.scrollTop ?? 0}px`; inner.textContent = src?.value ?? ta.value; box.appendChild(inner);
             ta.replaceWith(box);
           });
         },
       });
       const t = client.latest[focus]?.time_s ?? 0;
-      const name = `${spec.name.replace(/[^A-Za-z0-9]+/g, "_")}_t${t.toFixed(0)}s_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+      const tag = label.trim().replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
+      const name = `${spec.name.replace(/[^A-Za-z0-9]+/g, "_")}_t${t.toFixed(0)}s${tag ? "_" + tag : ""}_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
       canvas.toBlob((blob) => { if (blob) download(name, blob, "image/png"); }, "image/png");
       simTime.textContent = "screenshot saved";
       setTimeout(() => { if (simTime.textContent === "screenshot saved") simTime.textContent = prev; }, 1500);
     } catch (e) {
       console.error(e);
       simTime.textContent = "screenshot failed";
-    } finally { btnShot.disabled = false; }
-  });
+    } finally { shotBusy = false; btnShot.disabled = false; }
+  };
+  btnShot.addEventListener("click", () => void takeScreenshot());
 
   // ---- Logger -------------------------------------------------------------
   const btnLog = $<HTMLButtonElement>("btn-log");
@@ -373,6 +376,7 @@ async function main(): Promise<void> {
       log: setLogging,
       speed: (x) => { speedSel.value = String(x); readSpeed(); },
       note: (txt) => { lastNote = txt; },
+      screenshot: (label) => void takeScreenshot(label),
       end: () => scenarioStop(),
     }, (key) => { const st = focusState(); return st ? signal(key).get(st) : NaN; });
     runner.start(client.latest[0]?.time_s ?? 0);

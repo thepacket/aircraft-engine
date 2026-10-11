@@ -165,7 +165,7 @@ fn apply(e: &mut AnyEngine, cmd: &str, val: Option<&str>, env: &mut [f64; 4]) {
             e.set_faults_json(&format!("{{\"{name}\": {json_v}}}"))
         }
         "bottle" => e.set_faults_json("{\"fire_bottle\": true}"),
-        "end" | "log" | "note" | "speed" | "engine" => Ok(()),
+        "end" | "log" | "note" | "speed" | "engine" | "screenshot" => Ok(()),
         "check" | "watch" => { eprintln!("note: checkpoints are evaluated in the IDE: {cmd} {}", val.unwrap_or("")); Ok(()) }
         other => Err(format!("unknown command {other}")),
     };

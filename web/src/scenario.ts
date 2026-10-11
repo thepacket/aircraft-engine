@@ -32,10 +32,12 @@ export interface ScenarioHandlers {
   log(on: boolean): void;
   speed(x: number): void;
   note(text: string): void;
+  /** Save a PNG of the flight deck; the optional label goes into the file name */
+  screenshot(label: string): void;
   end(): void;
 }
 
-export const COMMANDS = ["engine", "ctl", "starter", "fuel", "tla", "throttle", "power", "n1", "alt", "mach", "isa", "humidity", "running", "antiice", "pack", "reverser", "fault", "bottle", "log", "speed", "note", "check", "watch", "end"];
+export const COMMANDS = ["engine", "ctl", "starter", "fuel", "tla", "throttle", "power", "n1", "alt", "mach", "isa", "humidity", "running", "antiice", "pack", "reverser", "fault", "bottle", "log", "speed", "note", "screenshot", "check", "watch", "end"];
 const OPS = new Set([">", ">=", "<", "<=", "==", "!="]);
 
 export interface Condition { signal: string; op: string; value: number }
@@ -196,6 +198,7 @@ export class ScenarioRunner {
       case "log": this.h.log(on); break;
       case "speed": this.h.speed(n(1)); break;
       case "note": this.h.note(e.arg); break;
+      case "screenshot": this.h.screenshot(e.arg); break;
       case "check": {
         const c = parseCondition(e.arg)!;
         const v = this.read(c.signal);

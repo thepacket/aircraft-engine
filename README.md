@@ -181,6 +181,7 @@ at 120   fault ignition_fail on
 # checkpoints: check is evaluated when its line fires, watch must hold to the end
 at 18    watch egt < 725
 at 90    check n1 >= 20
+at 90    screenshot idle     # saves a PNG of the flight deck
 # piston / turboprop controls through ctl:
 at 0     ctl magnetos 3
 at 2     ctl primer 3
