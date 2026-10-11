@@ -10,7 +10,7 @@
 //! P&WC PT6A-114A maintenance / operating data (published figures).
 
 use crate::atmosphere::{inlet as inlet_conditions, isa, Inlet};
-use crate::cycle::{burner_fuel, burner_t_out, nozzle, CP_AIR, CP_GAS, GAMMA_GAS, WINDMILL_PT_LOSS};
+use crate::cycle::{burner_fuel, burner_t_out, nozzle, CP_AIR, CP_GAS, GAMMA_GAS, T_REF, WINDMILL_PT_LOSS};
 use crate::logger::DataLogger;
 use crate::propeller::{governor_step, prop_forces, PropForces, PropSpec};
 use crate::spec::interp;
@@ -528,10 +528,11 @@ pub fn tp_cycle(spec: &TurbopropSpec, inlet: &Inlet, ngc: f64, t4: f64, combusti
     let tt45_u = t4 - dt_ct;
     let ct_pr = if combustion { turbine_pr(t4, dt_ct, fo(d.eta_ct)) } else { 1.0 / (1.0 - WINDMILL_PT_LOSS) };
     let pt45 = pt4 / ct_pr;
-    let tt45 = (w4 * CP_GAS * tt45_u + d.cooling_bleed_fraction * w2 * CP_AIR * tt3) / (w45 * CP_GAS);
-    // Power turbine expands to the exhaust duct pressure
+    let tt45 = T_REF + (w4 * CP_GAS * (tt45_u - T_REF) + d.cooling_bleed_fraction * w2 * CP_AIR * (tt3 - T_REF)) / (w45 * CP_GAS);
+    // Power turbine expands to the exhaust duct pressure. Unpowered, the
+    // turbine is one more loss and the exhaust pressure follows from upstream.
     let p0 = inlet.ambient.pressure_pa;
-    let pt5 = d.exhaust_pressure_ratio * p0;
+    let pt5 = if combustion { d.exhaust_pressure_ratio * p0 } else { pt45 * (1.0 - WINDMILL_PT_LOSS) };
     let pt_pr = (pt45 / pt5).max(1.0);
     let k = (GAMMA_GAS - 1.0) / GAMMA_GAS;
     let eta_pt = fo(d.eta_pt) * np_factor.clamp(0.0, 1.0);
@@ -1094,7 +1095,7 @@ impl TurbopropEngine {
                 let demand = ss.wf + ctl.governor_gain_kg_s_per_pct * (self.ng_cmd - self.ng);
                 let ngc_pct = self.ng / st;
                 self.wf_max = interp(&ctl.accel_wf_p3_vs_ngc, ngc_pct) * self.ps3_kpa / 3600.0;
-                self.wf_min = (interp(&ctl.decel_wf_p3_vs_ngc, ngc_pct) * self.ps3_kpa / 3600.0).max((ctl.min_fuel_kg_s * inl.delta).min(0.9 * ss.wf));
+                self.wf_min = (interp(&ctl.decel_wf_p3_vs_ngc, ngc_pct) * self.ps3_kpa / 3600.0).max(ctl.min_fuel_kg_s * inl.delta).min(0.9 * ss.wf);
                 if self.surge_recovery_s > 0.0 {
                     self.surge_recovery_s -= h;
                     let fr = 1.0 - self.surge_recovery_s / 4.0;

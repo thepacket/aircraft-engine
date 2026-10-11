@@ -33,6 +33,24 @@ fn burner_balance_conserves_energy_from_a_common_datum() {
 }
 
 #[test]
+fn burner_turbine_and_cooling_mix_conserve_energy() {
+    for s in turbofans() {
+        let d = size_design_point(&s);
+        let r = &d.takeoff;
+        let dp = &s.design_point;
+        let t = |id: &str| r.stations.iter().find(|x| x.id == id).unwrap().tt_k;
+        let h_air = |tt: f64| CP_AIR * (tt - T_REF);
+        let h_gas = |tt: f64| CP_GAS * (tt - T_REF);
+        // Everything leaving the HPC: burner air plus cooling air at T3, plus the fuel
+        let w_in = r.w25_kg_s - r.bleed_kg_s;
+        let e_in = w_in * h_air(t("3")) + r.wf_kg_s * dp.eta_burner * dp.fuel_lhv_j_kg;
+        // Everything at the LPT inlet, plus the work the HPT took out
+        let e_out = r.w5_kg_s * h_gas(t("45")) + r.hpt_power_w;
+        assert!((e_in - e_out).abs() / e_in < 1e-9, "{}: energy residual {:.0} W", s.name, e_in - e_out);
+    }
+}
+
+#[test]
 fn turbofan_mass_balance_closes_with_the_vbv_open() {
     let s = EngineSpec::cfm56_7b26();
     let d = size_design_point(&s);
@@ -76,6 +94,10 @@ fn unpowered_turbojet_and_turboprop_cores_produce_no_jet_thrust() {
     let tp = TurbopropSpec::pt6a_114a();
     let r = tp_cycle(&tp, &inlet(isa(3_000.0, 0.0), 0.3), 0.15, 0.0, false, 1.0, 0.0);
     assert!(r.jet_thrust_n <= 0.0 && r.shaft_power_w == 0.0, "turboprop windmill jet thrust {:.0} N", r.jet_thrust_n);
+    // Static, where ram drag cannot hide an exhaust pressure rise: nothing leaves
+    let r = tp_cycle(&tp, &inlet(isa(0.0, 0.0), 0.0), 0.15, 0.0, false, 1.0, 0.0);
+    assert!(r.pt5 < inlet(isa(0.0, 0.0), 0.0).ambient.pressure_pa, "cold exhaust pressure {:.0} Pa above ambient", r.pt5);
+    assert_eq!(r.jet_thrust_n, 0.0, "cold static turboprop jet thrust {:.1} N", r.jet_thrust_n);
 }
 
 #[test]
@@ -114,15 +136,21 @@ fn egt_limit_does_not_depend_on_the_order_bleeds_were_switched() {
 #[test]
 fn flight_idle_is_reached_at_cruise_altitude() {
     for s in turbofans() {
-        let mut e = Engine::new(s.clone());
-        e.environment.altitude_m = 10_668.0;
-        e.environment.mach = 0.78;
-        e.set_running(0.8);
-        run(&mut e, 30.0);
-        e.controls.tla = 0.0;
-        run(&mut e, 120.0);
-        let st = e.state();
-        assert!((st.n1_pct - st.n1_command_pct).abs() < 0.5, "{}: commanded N1 {:.2}, actual {:.2} (fuel floor {:.3} kg/s)", s.name, st.n1_command_pct, st.n1_pct, st.fuel_decel_limit_kg_s);
+        for disa in [0.0, -30.0, 20.0] {
+            let mut e = Engine::new(s.clone());
+            e.environment.altitude_m = 10_668.0;
+            e.environment.mach = 0.78;
+            e.environment.delta_isa_k = disa;
+            e.set_running(0.8);
+            run(&mut e, 30.0);
+            e.controls.tla = 0.0;
+            run(&mut e, 120.0);
+            let st = e.state();
+            // The fan cannot turn slower than it windmills at this Mach number
+            let n1_windmill = (s.start.windmill_n1_per_mach * 0.78).min(35.0);
+            let at_floor = st.n1_pct <= n1_windmill + 0.05 && st.n1_command_pct < st.n1_pct;
+            assert!((st.n1_pct - st.n1_command_pct).abs() < 0.5 || at_floor, "{} at ISA{disa:+}: commanded N1 {:.2}, actual {:.2} (fuel floor {:.3} kg/s)", s.name, st.n1_command_pct, st.n1_pct, st.fuel_decel_limit_kg_s);
+        }
     }
 }
 

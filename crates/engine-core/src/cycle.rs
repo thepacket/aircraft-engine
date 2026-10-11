@@ -318,8 +318,9 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
     let tf = |eta: f64, n: f64| eta * (1.0 - d.turbine_efficiency_falloff * (1.0 - n.min(1.0)).powi(2));
     let hpt_pr = if input.combustion { turbine_pr(t4, dt_hpt, tf(d.eta_hpt, cs.n2)) } else { 1.0 / (1.0 - WINDMILL_PT_LOSS) };
     let pt45 = pt4 / hpt_pr;
-    // Cooling air returns downstream of the HPT
-    let tt45 = (w4 * CP_GAS * tt45_uncooled + fc * cs.w25 * CP_AIR * cs.tt3) / (w5 * CP_GAS);
+    // Cooling air returns downstream of the HPT: constant-pressure mixing with
+    // enthalpies on the burner's datum (T_REF), so no energy is created or lost
+    let tt45 = T_REF + (w4 * CP_GAS * (tt45_uncooled - T_REF) + fc * cs.w25 * CP_AIR * (cs.tt3 - T_REF)) / (w5 * CP_GAS);
 
     // LPT
     let dt_lpt = lpt_power / (w5 * CP_GAS);

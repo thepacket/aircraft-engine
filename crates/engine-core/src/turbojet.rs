@@ -15,7 +15,7 @@
 //! approximations, as for the other engine kinds.
 
 use crate::atmosphere::{inlet as inlet_conditions, isa, Inlet};
-use crate::cycle::{burner_fuel, burner_t_out, nozzle, CP_AIR, CP_GAS, GAMMA_GAS, WINDMILL_PT_LOSS};
+use crate::cycle::{burner_fuel, burner_t_out, nozzle, CP_AIR, CP_GAS, GAMMA_GAS, T_REF, WINDMILL_PT_LOSS};
 use crate::logger::DataLogger;
 use crate::spec::interp;
 use serde::{Deserialize, Serialize};
@@ -371,7 +371,7 @@ pub fn tj_cycle(spec: &TurbojetSpec, inlet: &Inlet, nc: f64, t4: f64, combustion
     let t_pr = if combustion { turbine_pr(t4, dt_t, fo(d.eta_turbine)) } else { 1.0 / (1.0 - WINDMILL_PT_LOSS) };
     let pt5 = pt4 / t_pr;
     let w5 = w2 * (1.0 - bleed) + wf;
-    let tt5 = (w4 * CP_GAS * tt5_u + d.cooling_bleed_fraction * w2 * CP_AIR * tt3) / (w5 * CP_GAS);
+    let tt5 = T_REF + (w4 * CP_GAS * (tt5_u - T_REF) + d.cooling_bleed_fraction * w2 * CP_AIR * (tt3 - T_REF)) / (w5 * CP_GAS);
     // Afterburner
     let wf_ab = if combustion { wf_ab.max(0.0) } else { 0.0 };
     let lit = wf_ab > 1e-6;
@@ -936,7 +936,7 @@ impl TurbojetEngine {
                 let demand = ss.wf + ctl.governor_gain_kg_s_per_pct * (self.n_cmd - self.n);
                 let nc_pct = self.n / st;
                 self.wf_max = interp(&ctl.accel_wf_p3_vs_nc, nc_pct) * self.ps3_kpa / 3600.0;
-                self.wf_min = (interp(&ctl.decel_wf_p3_vs_nc, nc_pct) * self.ps3_kpa / 3600.0).max((ctl.min_fuel_kg_s * inl.delta).min(0.9 * ss.wf));
+                self.wf_min = (interp(&ctl.decel_wf_p3_vs_nc, nc_pct) * self.ps3_kpa / 3600.0).max(ctl.min_fuel_kg_s * inl.delta).min(0.9 * ss.wf);
                 if self.surge_recovery_s > 0.0 {
                     self.surge_recovery_s -= h;
                     let fr = 1.0 - self.surge_recovery_s / 4.0;

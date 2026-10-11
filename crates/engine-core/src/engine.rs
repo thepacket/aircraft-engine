@@ -733,9 +733,9 @@ impl Engine {
                 self.wf_max = interp(&fd.accel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0;
                 // The decel floor protects against lean blow-out. The minimum
                 // fuel scales with inlet pressure like the Wf/Ps3 schedule, and
-                // it stays below the steady fuel at the current speed so the
-                // engine always keeps authority to decelerate to the command.
-                self.wf_min = (interp(&fd.decel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0).max((fd.min_fuel_kg_s * inl.delta).min(0.9 * ss.wf_kg_s));
+                // the whole floor stays below the steady fuel at the current
+                // speed so the engine always has authority to decelerate.
+                self.wf_min = (interp(&fd.decel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0).max(fd.min_fuel_kg_s * inl.delta).min(0.9 * ss.wf_kg_s);
                 // Transient EGT limiting: blend the accel limit down to the steady
                 // fuel as the sensed EGT approaches the takeoff limit.
                 if fd.egt_transient_margin_c > 0.0 {
