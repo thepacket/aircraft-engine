@@ -273,7 +273,7 @@ async function main(): Promise<void> {
   buildLessons();
   presetSel.addEventListener("change", () => void loadPreset(presetSel.value));
   if (shared?.scenario) scenarioText.value = shared.scenario; else if (lsGet(LS.scenario)) scenarioText.value = lsGet(LS.scenario)!; else await loadPreset(kind.lessons[0][0]);
-  scenarioText.addEventListener("input", () => { lsSet(LS.scenario, scenarioText.value); scenarioHlKey = ""; });
+  scenarioText.addEventListener("input", () => { lsSet(LS.scenario, scenarioText.value); scenarioHlKey = ""; finishedRunner = null; });
   // Highlight layer: the current line (last event applied) and the armed conditional lines
   const scenarioHl = $("scenario-hl");
   let scenarioHlKey = "";
@@ -281,12 +281,14 @@ async function main(): Promise<void> {
   const renderScenarioHighlight = (): void => {
     const cur = runner?.active ? runner.currentLine : 0;
     const waiting = runner?.active ? runner.waitingLines : [];
-    const key = `${cur}|${waiting.join(",")}|${scenarioText.value.length}`;
+    const results = (runner ?? finishedRunner)?.results ?? [];
+    const verdict = new Map(results.map((r) => [r.line, r.pass === null ? "pending" : r.pass ? "pass" : "fail"]));
+    const key = `${cur}|${waiting.join(",")}|${scenarioText.value.length}|${results.map((r) => r.line + ":" + r.pass).join(",")}`;
     if (key === scenarioHlKey) return;
     scenarioHlKey = key;
     const prevCur = scenarioHl.querySelector(".ln.current");
     scenarioHl.innerHTML = scenarioText.value.split(/\r?\n/).map((l, i) => {
-      const n = i + 1, cls = n === cur ? " current" : waiting.includes(n) ? " waiting" : "";
+      const n = i + 1, cls = n === cur ? " current" : waiting.includes(n) ? " waiting" : verdict.has(n) ? " " + verdict.get(n) : "";
       return `<div class="ln${cls}">${esc(l) || " "}</div>`;
     }).join("");
     scenarioHl.scrollTop = scenarioText.scrollTop;
@@ -301,13 +303,24 @@ async function main(): Promise<void> {
   $("btn-scenario-save").addEventListener("click", () => download("scenario.txt", scenarioText.value, "text/plain"));
 
   let runner: ScenarioRunner | null = null;
+  /** The last runner, kept after it finishes so its checkpoint results stay visible */
+  let finishedRunner: ScenarioRunner | null = null;
   let lastNote = "";
   const btnRun = $<HTMLButtonElement>("btn-scenario-run"), btnStop = $<HTMLButtonElement>("btn-scenario-stop");
-  const scenarioStop = (): void => { runner?.stop(); runner = null; btnRun.disabled = false; btnStop.disabled = true; };
+  const checkSummary = (r: ScenarioRunner): string => {
+    const s = r.summary;
+    if (!r.results.length) return "";
+    const lines = r.results.map((c) => `${c.pass === null ? "…" : c.pass ? "✓" : "✗"} line ${c.line}: ${c.kind} ${c.text}${c.detail ? " (" + c.detail + ")" : ""}`);
+    return `checks: ${s.passed} passed, ${s.failed} failed${s.pending ? `, ${s.pending} open` : ""}\n${lines.join("\n")}`;
+  };
+  const scenarioStop = (): void => {
+    if (runner) { runner.stop(); finishedRunner = runner; if (runner.results.length) { const s = runner.summary; lastNote = `Finished: ${s.passed} of ${s.passed + s.failed} checks passed`; } }
+    runner = null; btnRun.disabled = false; btnStop.disabled = true;
+  };
   btnRun.addEventListener("click", () => {
     const { events, errors } = parseScenario(scenarioText.value);
     if (errors.length) { scenarioStatus.textContent = errors.join("\n"); scenarioStatus.classList.add("err"); return; }
-    scenarioStatus.classList.remove("err"); lastNote = "";
+    scenarioStatus.classList.remove("err"); lastNote = ""; finishedRunner = null;
     let scTarget: EngineTarget = "all";
     runner = new ScenarioRunner(events, {
       engine: (t) => { scTarget = t; },
@@ -494,7 +507,9 @@ async function main(): Promise<void> {
     logStatus.textContent = `${st.logger_rows} rows${st.logger_enabled ? " · recording" : ""}${runner?.active ? `  ·  scenario t+${runner.elapsed.toFixed(0)} s` : ""}`;
     btnLog.textContent = st.logger_enabled ? "Stop logging" : "Start logging"; btnLog.classList.toggle("active", st.logger_enabled);
     renderScenarioHighlight();
-    scenarioStatus.textContent = runner?.active ? `Running — ${runner.current}${runner.pendingConditions.length ? "\nwaiting: " + runner.pendingConditions.join("; ") : ""}` : scenarioStatus.classList.contains("err") ? scenarioStatus.textContent : "Idle";
+    scenarioStatus.textContent = runner?.active
+      ? `Running — ${runner.current}${runner.pendingConditions.length ? "\nwaiting: " + runner.pendingConditions.join("; ") : ""}${runner.results.length ? "\n" + checkSummary(runner) : ""}`
+      : scenarioStatus.classList.contains("err") ? scenarioStatus.textContent : finishedRunner?.results.length ? `Finished — ${checkSummary(finishedRunner)}` : "Idle";
   }
 
   function renderSlow(st: AnyState): void {

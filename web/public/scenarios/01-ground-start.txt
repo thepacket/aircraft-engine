@@ -6,6 +6,10 @@ at 0    log on
 at 0    starter on
 at 18   note Fuel lever to RUN at ~25% N2
 at 18   fuel on
+at 18   watch egt < 725
 at 75   starter off
 at 90   note Stabilised at ground idle
+at 90   check n1 >= 20
+at 90   check n1 <= 23
+at 90   check n2 >= 58
 at 100  end

@@ -177,6 +177,9 @@ textarea:focus { outline: 1px solid #1f6b2e; }
 .editor-hl { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; padding: 6px 16px 6px 6px; font-family: var(--mono); font-size: 12px; line-height: 1.45; tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; color: transparent; }
 .editor-hl .ln { border-radius: 2px; }
 .editor-hl .ln.waiting { color: var(--amber); background: #2a2008; box-shadow: inset 3px 0 0 var(--amber); }
+.editor-hl .ln.pass { color: var(--green); background: #0b2a12; box-shadow: inset 3px 0 0 var(--green); }
+.editor-hl .ln.fail { color: var(--red); background: #2a0a0a; box-shadow: inset 3px 0 0 var(--red); text-shadow: 0 0 6px #ff3d3d66; }
+.editor-hl .ln.pending { color: var(--amber); background: #1f1806; box-shadow: inset 3px 0 0 #ffb30088; }
 .editor-hl .ln.current { color: #fff; font-weight: 700; background: #124a1e; box-shadow: inset 3px 0 0 #fff, 0 0 8px #39d35366; text-shadow: 0 0 6px #ffffffaa; }
 .scenario-status { color: var(--green); font-family: var(--mono); font-size: 11px; min-height: 14px; white-space: pre-wrap; opacity: 0.85; }
 .scenario-status.err { color: var(--amber); opacity: 1; }

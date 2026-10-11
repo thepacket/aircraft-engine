@@ -4,6 +4,9 @@
 //        time of the preceding `at` line, fires once when true
 // Commands are engine-generic: `ctl <control> <value>` sets any control of the
 // active engine kind; shorthands (starter, fuel, tla, ...) map onto it.
+// Checkpoints turn a lesson into an assessment:
+//   check <signal> <op> <value>     evaluated once, when the line fires
+//   watch <signal> <op> <value>     must hold from when the line fires to the end
 import { hasSignal } from "./signals";
 
 export interface ScenarioEvent {
@@ -32,8 +35,31 @@ export interface ScenarioHandlers {
   end(): void;
 }
 
-export const COMMANDS = ["engine", "ctl", "starter", "fuel", "tla", "throttle", "power", "n1", "alt", "mach", "isa", "humidity", "running", "antiice", "pack", "reverser", "fault", "bottle", "log", "speed", "note", "end"];
+export const COMMANDS = ["engine", "ctl", "starter", "fuel", "tla", "throttle", "power", "n1", "alt", "mach", "isa", "humidity", "running", "antiice", "pack", "reverser", "fault", "bottle", "log", "speed", "note", "check", "watch", "end"];
 const OPS = new Set([">", ">=", "<", "<=", "==", "!="]);
+
+export interface Condition { signal: string; op: string; value: number }
+export interface CheckResult {
+  line: number;
+  kind: "check" | "watch";
+  text: string;
+  /** null while a watch is still open */
+  pass: boolean | null;
+  detail: string;
+}
+
+function parseCondition(arg: string): Condition | null {
+  const m = arg.match(/^(\w+)\s*(>=|<=|==|!=|>|<)\s*(-?[0-9.]+)\s*$/);
+  return m && OPS.has(m[2]) ? { signal: m[1], op: m[2], value: parseFloat(m[3]) } : null;
+}
+
+function validateCheck(cmd: string, arg: string, i: number, errors: string[]): boolean {
+  if (cmd !== "check" && cmd !== "watch") return true;
+  const c = parseCondition(arg);
+  if (!c) { errors.push(`line ${i + 1}: expected "${cmd} <signal> <op> <value>"`); return false; }
+  if (!hasSignal(c.signal)) { errors.push(`line ${i + 1}: unknown signal "${c.signal}" for this engine`); return false; }
+  return true;
+}
 
 export function parseScenario(text: string): { events: ScenarioEvent[]; errors: string[] } {
   const events: ScenarioEvent[] = [];
@@ -47,6 +73,7 @@ export function parseScenario(text: string): { events: ScenarioEvent[]; errors: 
     if (at) {
       const cmd = at[2].toLowerCase();
       if (!COMMANDS.includes(cmd)) { errors.push(`line ${i + 1}: unknown command "${at[2]}"`); return; }
+      if (!validateCheck(cmd, at[3].trim(), i, errors)) return;
       lastAt = parseFloat(at[1]);
       events.push({ t: lastAt, cmd, arg: at[3].trim(), line: i + 1 });
     } else if (when) {
@@ -54,6 +81,7 @@ export function parseScenario(text: string): { events: ScenarioEvent[]; errors: 
       if (!hasSignal(when[1])) { errors.push(`line ${i + 1}: unknown signal "${when[1]}" for this engine`); return; }
       if (!OPS.has(when[2])) { errors.push(`line ${i + 1}: bad operator "${when[2]}"`); return; }
       if (!COMMANDS.includes(cmd)) { errors.push(`line ${i + 1}: unknown command "${when[4]}"`); return; }
+      if (!validateCheck(cmd, when[5].trim(), i, errors)) return;
       events.push({ t: lastAt, cmd, arg: when[5].trim(), line: i + 1, cond: { signal: when[1], op: when[2], value: parseFloat(when[3]) } });
     } else {
       errors.push(`line ${i + 1}: expected "at <seconds> <command>" or "when <signal> <op> <value> <command>"`);
@@ -61,6 +89,12 @@ export function parseScenario(text: string): { events: ScenarioEvent[]; errors: 
   });
   events.sort((a, b) => a.t - b.t || a.line - b.line);
   return { events, errors };
+}
+
+function fmtNum(v: number): string {
+  if (!Number.isFinite(v)) return "n/a";
+  const a = Math.abs(v);
+  return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
 }
 
 function test(op: string, a: number, b: number): boolean {
@@ -89,11 +123,25 @@ export class ScenarioRunner {
   current = "";
   /** Script line (1-based) of the last event applied, 0 before the first */
   currentLine = 0;
+  /** Checkpoint results in the order they were opened */
+  results: CheckResult[] = [];
+  private watches: { result: CheckResult; cond: Condition; worst: number; worstT: number }[] = [];
 
   constructor(private events: ScenarioEvent[], private h: ScenarioHandlers, private read: (signal: string) => number) {}
 
-  start(simTime: number): void { this.t0 = simTime; this.active = true; this.current = ""; this.currentLine = 0; for (const e of this.events) e.fired = false; }
-  stop(): void { this.active = false; }
+  start(simTime: number): void { this.t0 = simTime; this.lastT = simTime; this.active = true; this.current = ""; this.currentLine = 0; this.results = []; this.watches = []; for (const e of this.events) e.fired = false; }
+  stop(): void { this.finish(); }
+  /** Close the open watches (they pass if never violated) and stop. */
+  private finish(): void {
+    for (const w of this.watches) if (w.result.pass === null) { w.result.pass = true; w.result.detail = `held to t+${this.elapsed.toFixed(0)} s`; }
+    this.watches = [];
+    this.active = false;
+  }
+  get summary(): { passed: number; failed: number; pending: number } {
+    let passed = 0, failed = 0, pending = 0;
+    for (const r of this.results) { if (r.pass === null) pending++; else if (r.pass) passed++; else failed++; }
+    return { passed, failed, pending };
+  }
   get elapsed(): number { return this.lastT - this.t0; }
   private get armed(): ScenarioEvent[] { const rel = this.lastT - this.t0; return this.events.filter((e) => e.cond && !e.fired && e.t <= rel); }
   get pendingConditions(): string[] { return this.armed.map((e) => `${e.cond!.signal} ${e.cond!.op} ${e.cond!.value} → ${e.cmd} ${e.arg}`); }
@@ -111,7 +159,15 @@ export class ScenarioRunner {
       this.apply(e);
       if (!this.active) return;
     }
-    if (this.events.every((e) => e.fired)) this.active = false;
+    // Watches: record the first violation and the worst value seen
+    for (const w of this.watches) {
+      const v = this.read(w.cond.signal);
+      if (!Number.isFinite(v)) continue;
+      const bad = !test(w.cond.op, v, w.cond.value);
+      const worse = w.worst === undefined || Number.isNaN(w.worst) || (/[<]/.test(w.cond.op) ? v > w.worst : /[>]/.test(w.cond.op) ? v < w.worst : Math.abs(v - w.cond.value) > Math.abs(w.worst - w.cond.value));
+      if (bad && (w.result.pass !== false || worse)) { w.worst = v; w.worstT = rel; w.result.pass = false; w.result.detail = `${w.cond.signal} = ${fmtNum(v)} at t+${rel.toFixed(0)} s`; }
+    }
+    if (this.events.every((e) => e.fired)) this.finish();
   }
 
   private apply(e: ScenarioEvent): void {
@@ -140,7 +196,21 @@ export class ScenarioRunner {
       case "log": this.h.log(on); break;
       case "speed": this.h.speed(n(1)); break;
       case "note": this.h.note(e.arg); break;
-      case "end": this.h.end(); this.active = false; break;
+      case "check": {
+        const c = parseCondition(e.arg)!;
+        const v = this.read(c.signal);
+        const pass = Number.isFinite(v) && test(c.op, v, c.value);
+        this.results.push({ line: e.line, kind: "check", text: e.arg, pass, detail: `${c.signal} = ${fmtNum(v)} at t+${(this.lastT - this.t0).toFixed(0)} s` });
+        break;
+      }
+      case "watch": {
+        const c = parseCondition(e.arg)!;
+        const result: CheckResult = { line: e.line, kind: "watch", text: e.arg, pass: null, detail: "" };
+        this.results.push(result);
+        this.watches.push({ result, cond: c, worst: NaN, worstT: 0 });
+        break;
+      }
+      case "end": this.h.end(); this.finish(); break;
     }
   }
 }
