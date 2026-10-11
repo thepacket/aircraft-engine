@@ -6,7 +6,7 @@ import { initSweep } from "./sweep";
 import { StripChart } from "./charts";
 import { parseScenario, parseOnOff, ScenarioRunner } from "./scenario";
 import { signal, setActiveSignals, hasSignal } from "./signals";
-import { KINDS, kindDef, lessonsFor, type KindDef, type ControlDef } from "./kinds";
+import { KINDS, KNOWN_ISSUES, KNOWN_ISSUE_TRANSIENTS, kindDef, lessonsFor, type KindDef, type ControlDef } from "./kinds";
 import { setUnitSystem, unitSystem, speedOfSound, fmtFuelFlow, fmtPressure, fmtTemp, FT, type UnitSystem } from "./units";
 import { parseCsv, autoMap, Replay, Comparison, INPUT_CHANNELS, INPUT_UNITS, measuredSignals, type Mapping, type LogTable } from "./replay";
 import { encodeShare, decodeShare } from "./share";
@@ -476,6 +476,9 @@ async function main(): Promise<void> {
     else if (kind.kind === "turbojet") { const m = z.military as { wf: number; tt5: number; tsfc: number }, a = z.max_ab as { wf: number; wf_ab: number; tsfc: number }; specStatus.textContent = `Sized: A8 military ${((z.a8_mil_m2 as number) * 1e4).toFixed(0)} cm², A8 max A/B ${((z.a8_ab_max_m2 as number) * 1e4).toFixed(0)} cm², T4 ${(z.t4_mil_k as number).toFixed(0)} K, EGT ${(m.tt5 - 273.15).toFixed(0)} °C, FF ${(m.wf * 7936.64).toFixed(0)} lb/h dry / ${((a.wf + a.wf_ab) * 7936.64).toFixed(0)} lb/h A/B, TSFC ${(m.tsfc * 3600 * 9.80665).toFixed(2)} / ${(a.tsfc * 3600 * 9.80665).toFixed(2)}`; }
     else if (typeof z.rated_power_w === "number") { specStatus.textContent = `Rated ${((z.rated_power_w as number) / 745.7).toFixed(0)} hp at ${(z.rated_rpm as number).toFixed(0)} rpm`; }
     else { specStatus.textContent = ""; }
+    // Open items for this engine (docs/MODEL.md §0): never let a reader take an affected number as validated
+    const issue = KNOWN_ISSUES[client.preset || kind.kind] ?? (kind.kind !== "piston" ? KNOWN_ISSUE_TRANSIENTS : undefined);
+    if (issue) specStatus.textContent += `\n⚠ ${issue}`;
   };
   showSizing();
   const applySpec = (json: string): Promise<void> => applyKind(kind.kind, json).catch((e) => { specStatus.classList.add("err"); specStatus.textContent = `Spec rejected: ${String(e)}`; });

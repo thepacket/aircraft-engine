@@ -10,6 +10,21 @@ Part II (sections 11–14) covers the shared propeller model, the Lycoming
 O-360-A4M piston engine and the Pratt & Whitney Canada PT6A-114A turboprop.
 Section 15 lists the validation tests that pin every number quoted here.
 
+## 0. Open items
+
+Known gaps that the tests and the reviews have established and that remain
+unfixed, as of 2026-10-11. Each is also shown in the IDE's Spec tab when the
+engine concerned is selected. They are listed here so that nobody takes a
+number from an affected preset as validated.
+
+| # | Engine | What is wrong | Where it is tracked |
+|---|---|---|---|
+| 1 | V2527-A5 | Burns ~16 % more fuel than the ICAO databank record at matched thrust and bleed, and needs ~5.9 s instead of 5 s from flight idle to 95 % thrust (its EEC holds the 635 °C EGT limit). A one-parameter-at-a-time sweep of cooling flow, OPR, fan and turbine efficiencies and airflow recovers only 6.5 of the 16 %, so the cause is in the cycle model, not the constants. | `tests/icao.rs` (18 % tolerance), `tests/far33_73.rs` (6.25 s allowance), doc comment on `v2527_a5()` |
+| 2 | PT6A-42 | At ground idle with 65 kt of airspeed the propeller windmills on the fine stop at ~2,130 rpm, above the 2,000 rpm limit, so the overspeed governor refuses the reverse range. The reverse lesson is withheld for this preset. | doc comment on `pt6a_42()`, lesson catalog in `web/src/kinds.ts` |
+| 3 | 250-C20B (turboshaft) | Autorotation is a prescribed torque that holds Nr whenever there is forward airspeed and the collective is low. There is no descent rate, rotor attitude or inflow, so vertical autorotation and the Nr/descent-rate coupling cannot be shown. | comment in `turboprop.rs`, README |
+| 4 | All turbine families | Start and surge transients (time constants, start temperature peaks) are empirical curves checked against published limits and times, not against measured transient traces, which this project does not have. | `start_accel_vs_*` tables in the presets, §6 and §9 |
+| 5 | Fire drill lesson | The first bottle discharge with fuel still on cannot be proved by the physics (the model is identical with or without it), so that step is taught, not graded. | `13-fire.txt` |
+
 ## 1. Scope and philosophy
 
 The model reproduces the **published** behaviour of the real engine: ratings,

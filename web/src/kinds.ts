@@ -714,6 +714,15 @@ export const PRESET_LESSONS: Record<string, { lessons: [string, string][]; repla
     replaces: ["turboprop-01-start.txt", "turboprop-02-takeoff-torque-itt.txt", "turboprop-04-hot-start.txt", "turboprop-05-reverse.txt"] },
 };
 
+/** Open calibration and modelling items, shown in the Spec tab for the engine concerned (docs/MODEL.md §0) */
+export const KNOWN_ISSUES: Record<string, string> = {
+  v2500: "Open item: this preset burns ~16 % more fuel than the ICAO record at matched thrust and takes ~5.9 s (not 5 s) from flight idle to 95 % thrust. Its numbers are not validated. See Model → Open items.",
+  pt6a42: "Open item: at landing speed the propeller overspeeds on the fine stop and the governor refuses reverse, so the reverse lesson is withheld. See Model → Open items.",
+  turboshaft: "Open item: autorotation is a prescribed Nr-holding torque, not a rotor inflow model; it shows the procedure, not the physics. See Model → Open items.",
+};
+/** Applies to every turbine family */
+export const KNOWN_ISSUE_TRANSIENTS = "Start and surge transients are empirical curves checked against published limits and times, not measured traces (Model → Open items).";
+
 export function lessonsFor(kind: KindDef, preset: string): [string, string][] {
   const own = PRESET_LESSONS[preset];
   if (!own) return kind.lessons;
