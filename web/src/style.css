@@ -60,9 +60,11 @@ html, body { margin: 0; height: 100%; background: var(--floor); color: var(--tex
   border: 1px solid #0d0f11; border-radius: 6px 6px 3px 3px;
   box-shadow: inset 0 1px 0 #ffffff1a, 0 4px 10px #000c;
 }
-.brand { min-width: 0; flex: 1 1 220px; display: flex; flex-direction: column; line-height: 1.15; }
+.brand { min-width: 0; flex: 1 1 340px; display: flex; flex-direction: column; line-height: 1.15; }
 .brand-title { font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--placard); text-shadow: 0 1px 0 #000; white-space: nowrap; }
-.brand-sub { color: var(--muted); font-family: var(--mono); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand-sub { color: var(--muted); font-family: var(--mono); font-size: 10px; white-space: normal; overflow-wrap: anywhere; }
+.btn.icon { padding: 4px 8px; display: inline-flex; align-items: center; }
+.btn.icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .topbar-center { display: flex; align-items: center; gap: 10px; }
 .topbar-right { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .topbar-right label { color: var(--placard); display: flex; gap: 6px; align-items: center; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; text-shadow: 0 1px 0 #000; }
