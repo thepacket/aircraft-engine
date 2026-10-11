@@ -26,6 +26,21 @@ export interface SweepContext {
   hasN1: () => boolean;
 }
 
+/** One-click studies: fill the fields in; kinds restricts the recipe to engine kinds */
+interface Recipe { label: string; x: Var; y: string; s?: Var; sv?: string; from?: number; to?: number; kinds?: string[]; hint?: string }
+const RECIPES: Recipe[] = [
+  { label: "Thrust lapse", x: "alt", y: "thrust", s: "mach", sv: "0, 0.4, 0.78", hint: "set the lever first (e.g. Climb)" },
+  { label: "TSFC vs Mach", x: "mach", y: "tsfc", s: "n1", sv: "60, 80, 95", kinds: ["turbofan"] },
+  { label: "Hot-day flat rating", x: "disa", y: "thrust", from: -30, to: 40, kinds: ["turbofan"], hint: "lever at TO/GA" },
+  { label: "N1 vs ΔISA", x: "disa", y: "n1", from: -30, to: 40, kinds: ["turbofan"], hint: "lever at TO/GA" },
+  { label: "Surge margin", x: "n1", y: "sm_hpc", s: "alt", kinds: ["turbofan"] },
+  { label: "Power vs altitude", x: "alt", y: "power", kinds: ["piston"], hint: "full throttle" },
+  { label: "MAP vs altitude", x: "alt", y: "map", kinds: ["piston"], hint: "full throttle" },
+  { label: "Torque vs ΔISA", x: "disa", y: "torque", from: -30, to: 40, kinds: ["turboprop"], hint: "max power lever" },
+  { label: "ITT vs ΔISA", x: "disa", y: "itt", from: -30, to: 40, kinds: ["turboprop"], hint: "max power lever" },
+  { label: "Fuel flow vs lever", x: "level", y: "ff", s: "alt" },
+];
+
 export function initSweep(ctx: SweepContext): { rebuild: () => void } {
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
   const xSel = $<HTMLSelectElement>("sw-x"), ySel = $<HTMLSelectElement>("sw-y"), sSel = $<HTMLSelectElement>("sw-s");
@@ -46,8 +61,33 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
       sel.value = vars().some((v) => v.key === keep) ? keep : sel === xSel ? "alt" : "";
     }
   };
+  // Help panel and recipes
+  const helpBtn = $<HTMLButtonElement>("sw-help-btn"), help = $("sw-help"), recipes = $("sw-recipes");
+  helpBtn.addEventListener("click", () => { help.classList.toggle("hidden"); helpBtn.classList.toggle("active", !help.classList.contains("hidden")); });
+  const applyRecipe = (r: Recipe): void => {
+    xSel.value = r.x; setRange();
+    if (r.from !== undefined) from.value = String(r.from);
+    if (r.to !== undefined) to.value = String(r.to);
+    if (activeSignals().some((sg) => sg.key === r.y)) ySel.value = r.y;
+    sSel.value = r.s && vars().some((v) => v.key === r.s) ? r.s : "";
+    sVals.value = sSel.value ? (r.sv ?? varOf(sSel.value).seriesDef()) : ""; sVals.disabled = !sSel.value;
+    status.textContent = `${r.label}: ${r.hint ? r.hint + ", then " : ""}press Run sweep.`;
+    help.classList.add("hidden"); helpBtn.classList.remove("active");
+    btnRun.focus();
+  };
+  const fillRecipes = (): void => {
+    recipes.innerHTML = "";
+    const kind = ctx.hasN1() ? "turbofan" : activeSignals().some((sg) => sg.key === "itt") ? "turboprop" : "piston";
+    for (const r of RECIPES) {
+      if (r.kinds && !r.kinds.includes(kind)) continue;
+      if (!activeSignals().some((sg) => sg.key === r.y)) continue;
+      const b = document.createElement("button"); b.className = "btn small"; b.textContent = r.label; b.title = r.hint ?? "";
+      b.addEventListener("click", () => applyRecipe(r)); recipes.appendChild(b);
+    }
+  };
   const rebuild = (): void => {
     fillVars();
+    fillRecipes();
     const keep = ySel.value;
     ySel.innerHTML = "";
     for (const s of activeSignals()) { const o = document.createElement("option"); o.value = s.key; o.textContent = s.label; ySel.appendChild(o); }

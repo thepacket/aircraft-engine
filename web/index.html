@@ -179,7 +179,31 @@ at 200   end</pre>
           <div class="readouts" id="readouts"></div>
         </section>
         <section class="panel du sweep">
-          <h2>Parametric sweep <span class="hint">(steady state; variables not swept stay at the current settings)</span></h2>
+          <h2>Parametric sweep <span class="hint">(steady state; variables not swept stay at the current settings)</span> <button id="sw-help-btn" class="btn small sweep-help-btn" title="How to use the sweep">?</button></h2>
+          <div class="sweep-help hidden" id="sw-help">
+            <h3>What it does</h3>
+            <p>Computes the engine's <b>steady-state</b> performance at a series of operating points and plots one signal against one variable, without flying the simulation through each point. Each point is a copy of engine 1, reset, placed running and settled for 40 s; the live engines are untouched and any injected faults are cleared on the copy. Points are equilibrium values, so transients such as EGT overshoot during an acceleration do not appear.</p>
+            <h3>How to run one</h3>
+            <ol>
+              <li><b>Set what you are not sweeping.</b> The sweep holds every other variable at the current environment inputs (altitude, Mach, ΔISA, humidity) and the current main lever. After a reset the lever is at idle, so a thrust sweep would show idle thrust: set the lever (or use N1 / lever as X or series) first.</li>
+              <li><b>X</b>: altitude, Mach, ΔISA, lever position, or N1 (turbofans). The range fills with a default you can edit; <b>steps</b> is the number of points (2–60).</li>
+              <li><b>Y</b>: any signal of the engine, the same list as the strip charts (thrust, TSFC, EGT, fuel flow, surge margin…). Units follow the SI / Imperial selector.</li>
+              <li><b>Series</b> (optional): a second variable with up to six comma-separated values; each value becomes a curve. On the turbofans, choosing N1 as X or series holds N1 instead of the lever.</li>
+              <li><b>Run sweep</b>, then <b>CSV</b> to export the curves.</li>
+            </ol>
+            <h3>Studies worth doing</h3>
+            <p>The buttons below fill the fields in; set the lever or environment first where the study needs it.</p>
+            <div class="row" id="sw-recipes"></div>
+            <ul>
+              <li><b>Thrust lapse</b>: net thrust vs altitude for several Mach numbers. Why climb thrust falls off, and how ram effect helps at speed.</li>
+              <li><b>TSFC vs Mach</b> at several N1: the classic turbofan curves and the reason cruise is flown at high Mach and high N1.</li>
+              <li><b>Hot-day flat rating</b>: thrust or N1 vs ΔISA with the lever at TO/GA. The curve kinks at the flat-rating corner where the EGT limit takes over.</li>
+              <li><b>Engine comparison</b>: run the same sweep on the CFM56, LEAP-1B, V2500 and PW1100G and compare the CSVs; the cruise TSFC gap between generations stands out.</li>
+              <li><b>Piston altitude lapse</b>: brake power or manifold pressure vs altitude at full throttle, the loss of a normally aspirated engine.</li>
+              <li><b>Turboprop limits</b>: torque, then ITT, vs ΔISA at max power lever: where the engine goes from torque-limited to temperature-limited.</li>
+              <li><b>Surge margin</b>: HPC surge margin vs N1 for several altitudes, before writing a surge lesson.</li>
+            </ul>
+          </div>
           <div class="row sweep-row">
             <label>X <select id="sw-x"></select></label>
             <label>from <input id="sw-from" type="number" step="any" /></label>

@@ -251,6 +251,14 @@ table.stations th:first-child, table.stations th:nth-child(2), table.stations td
 table.stations td { text-align: right; padding: 2px 6px; border-bottom: 1px solid #0e151b; }
 table.stations td:first-child { color: var(--white); }
 table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); }
+.sweep-help-btn { margin-left: 8px; padding: 1px 8px; font-size: 11px; }
+.sweep-help { background: #000; border: 1px solid #1f2a33; border-radius: 3px; padding: 8px 12px; color: #cfe0d4; font-size: 12px; line-height: 1.45; max-height: 320px; overflow: auto; }
+.sweep-help.hidden { display: none; }
+.sweep-help h3 { margin: 6px 0 3px; font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
+.sweep-help p { margin: 3px 0; }
+.sweep-help ol, .sweep-help ul { margin: 3px 0; padding-left: 20px; }
+.sweep-help li { margin: 2px 0; }
+.sweep-help b { color: var(--white); }
 .sweep-row label { color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; display: flex; gap: 4px; align-items: center; }
 .sweep-row input[type="number"] { width: 72px; }
 .sweep-row input[type="text"] { width: 140px; background: #050607; color: var(--lcd); border: 1px solid #0a0b0c; border-radius: 2px; padding: 4px 6px; font-family: var(--mono); box-shadow: inset 0 2px 5px #000, 0 0 0 1px #4a5058; }
