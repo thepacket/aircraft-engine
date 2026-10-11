@@ -4,7 +4,7 @@ import { activeSignals, signal, type Signal } from "./signals";
 import type { AnyState as EngineState } from "./types";
 import { unitSystem } from "./units";
 
-const ENGINE_COLORS = ["#4fc3f7", "#b388ff"];
+const ENGINE_COLORS = ["#19d3f5", "#ff4fd8"];
 const REF_COLOR = "#ffb300";
 const CAP = 12000;
 
@@ -114,9 +114,9 @@ export class StripChart {
     }
     if (vmax - vmin < 1e-9) vmax = vmin + 1;
 
-    ctx.strokeStyle = "#1c2733"; ctx.lineWidth = 1;
+    ctx.strokeStyle = "#162029"; ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) { const y = padT + (ph * i) / 4; ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke(); }
-    ctx.fillStyle = "#8a9bb0"; ctx.font = "10px ui-monospace, Menlo, monospace"; ctx.textAlign = "right";
+    ctx.fillStyle = "#39d353"; ctx.font = "10px ui-monospace, Menlo, monospace"; ctx.textAlign = "right";
     ctx.fillText(fmt(vmax), padL - 3, padT + 4);
     ctx.fillText(fmt((vmax + vmin) / 2), padL - 3, padT + ph / 2 + 3);
     ctx.fillText(fmt(vmin), padL - 3, padT + ph + 3);
@@ -156,10 +156,10 @@ export class StripChart {
     if (this.ref.count) legend("log", REF_COLOR, this.conv(tCursor !== null ? this.ref.at(tCursor) : this.ref.last()));
 
     if (tCursor !== null) {
-      ctx.strokeStyle = "#5f7187"; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(this.hoverX!, padT); ctx.lineTo(this.hoverX!, padT + ph); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = "#8a9bb0"; ctx.textAlign = "center"; ctx.fillText(`t = ${tCursor.toFixed(1)} s`, this.hoverX!, h - 2);
+      ctx.strokeStyle = "#8e98a4"; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(this.hoverX!, padT); ctx.lineTo(this.hoverX!, padT + ph); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "#f4f7fa"; ctx.textAlign = "center"; ctx.fillText(`t = ${tCursor.toFixed(1)} s`, this.hoverX!, h - 2);
     } else {
-      ctx.fillStyle = "#5f7187"; ctx.textAlign = "left"; ctx.fillText(`t = ${tNow.toFixed(0)} s`, padL + 2, h - 2);
+      ctx.fillStyle = "#8e98a4"; ctx.textAlign = "left"; ctx.fillText(`t = ${tNow.toFixed(0)} s`, padL + 2, h - 2);
     }
   }
 }

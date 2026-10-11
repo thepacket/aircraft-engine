@@ -65,7 +65,7 @@
           </div>
         </section>
 
-        <section class="panel grow">
+        <section class="panel grow cdu">
           <div class="tabs">
             <button class="tab active" data-tab="scenario">Scenario</button>
             <button class="tab" data-tab="spec">Spec</button>
@@ -149,16 +149,16 @@ at 200   end</pre>
       </aside>
 
       <main id="center">
-        <section class="panel eicas">
+        <section class="panel du eicas">
           <h2 id="eicas-title">Engine indications</h2>
           <div id="eicas"></div>
           <div id="warnings" class="warnings"></div>
         </section>
-        <section class="panel">
+        <section class="panel du">
           <h2>Performance <span class="hint" id="perf-hint">(not shown in a real cockpit)</span></h2>
           <div class="readouts" id="readouts"></div>
         </section>
-        <section class="panel">
+        <section class="panel du">
           <h2>Cycle stations</h2>
           <table class="stations" id="stations">
             <thead><tr><th>Station</th><th></th><th>Tt</th><th>Pt</th><th>W</th></tr></thead>
@@ -180,7 +180,7 @@ at 200   end</pre>
           </div>
           <div class="scenario-status" id="log-status">0 rows</div>
         </section>
-        <section class="panel grow charts">
+        <section class="panel du grow charts">
           <h2>Strip charts <label class="inline hint">window <select id="chart-window"><option value="30">30 s</option><option value="90" selected>90 s</option><option value="300">5 min</option><option value="900">15 min</option></select></label></h2>
           <div class="chart"><select class="chart-sel"></select><canvas id="chart-0"></canvas></div>
           <div class="chart"><select class="chart-sel"></select><canvas id="chart-1"></canvas></div>
