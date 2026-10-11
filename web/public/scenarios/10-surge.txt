@@ -8,8 +8,11 @@ at 0    running 0
 at 0    log on
 at 5    note Slam acceleration with a damaged compressor
 at 5    tla 1.0
+when surges >= 1  note SURGE: fuel to the decel floor, accel schedule re-armed
+at 25   check surges >= 1
 at 25   tla 0
 at 45   note Same engine, lever advanced gently: no surge
+at 45   watch surging < 0.5
 at 47   tla 0.05
 at 49   tla 0.10
 at 51   tla 0.15
@@ -30,4 +33,5 @@ at 79   tla 0.85
 at 81   tla 0.90
 at 83   tla 0.95
 at 85   tla 1.00
+at 98   check n1 >= 99
 at 100  end

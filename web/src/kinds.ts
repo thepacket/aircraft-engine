@@ -72,6 +72,8 @@ const turbofanSignals: Signal[] = [
   sig("sm_hpc", "HPC surge margin", "%", "%", id, -10, 30, 1, (s) => s.hpc_surge_margin_pct),
   sig("sm_fan", "Fan surge margin", "%", "%", id, -10, 30, 1, (s) => s.fan_surge_margin_pct),
   sig("surges", "Surge count", "", "", id, 0, 5, 0, (s) => s.surge_count),
+  sig("surging", "Surge in progress (1 = yes)", "", "", id, 0, 1, 0, (s) => (s.surge ? 1 : 0)),
+  sig("fire", "Fire warning (1 = fire)", "", "", id, 0, 1, 0, (s) => (s.fire_warning ? 1 : 0)),
   sig("vbv", "VBV position", "open", "open", id, 0, 1, 2, (s) => s.vbv_open),
   sig("vsv", "VSV angle", "°", "°", id, 0, 45, 0, (s) => s.vsv_angle_deg),
   sig("bleed", "Customer bleed", "kg/s", "lb/s", (v) => v * 2.20462, 0, 6, 2, (s) => s.cycle.bleed_kg_s),
@@ -323,6 +325,8 @@ const turbopropSignals: Signal[] = [
   sig("ff_max", "Accel limit", "kg/s", "lb/h", (v) => v * 7936.64, 0, 0.1, 4, (s) => s.fuel_accel_limit_kg_s),
   sig("sm", "Surge margin", "%", "%", id, -10, 25, 1, (s) => s.surge_margin_pct),
   sig("surges", "Surge count", "", "", id, 0, 5, 0, (s) => s.surge_count),
+  sig("surging", "Surge in progress (1 = yes)", "", "", id, 0, 1, 0, (s) => (s.surge ? 1 : 0)),
+  sig("fire", "Fire warning (1 = fire)", "", "", id, 0, 1, 0, (s) => (s.fire_warning ? 1 : 0)),
   sig("vib", "Vibration", "units", "units", id, 0, 5, 1, (s) => s.vib),
   sig("power_lever", "Power lever", "", "", id, -0.3, 1, 2, (s) => n(s.controls.power_lever)),
   sig("prop_lever", "Prop lever", "", "", id, 0, 1, 2, (s) => n(s.controls.prop_lever)),
@@ -696,7 +700,8 @@ export const PRESET_LESSONS: Record<string, { lessons: [string, string][]; repla
   v2500: { lessons: [["v2500-01-ground-start.txt", "V2500 01 Ground start"], ["v2500-02-takeoff-accel.txt", "V2500 02 Idle → takeoff acceleration"], ["v2500-03-hot-start.txt", "V2500 03 Hot start"], ["v2500-04-surge.txt", "V2500 04 Compressor surge"]], replaces: ["01-ground-start.txt", "02-takeoff-accel.txt", "07-hot-start.txt", "10-surge.txt"] },
   pw1100g: { lessons: [["pw1100g-01-ground-start.txt", "GTF 01 Ground start"], ["pw1100g-02-takeoff-accel.txt", "GTF 02 Idle → takeoff acceleration"], ["pw1100g-03-hot-start.txt", "GTF 03 Hot start"], ["pw1100g-04-flameout-relight.txt", "GTF 04 Flameout and auto-relight"]], replaces: ["01-ground-start.txt", "02-takeoff-accel.txt", "07-hot-start.txt", "11-flameout-relight.txt"] },
   o320: { lessons: [["o320-01-cold-start.txt", "O-320 01 Cold start, run-up and mag check"], ["o320-02-takeoff-climb.txt", "O-320 02 Takeoff and climb"]], replaces: ["piston-01-cold-start.txt", "piston-02-mag-check.txt", "piston-03-takeoff-climb.txt"] },
-  pt6a42: { lessons: [["pt6a42-01-start.txt", "PT6A-42 01 Ground start"], ["pt6a42-02-takeoff-torque-itt.txt", "PT6A-42 02 Takeoff: torque vs ITT"]], replaces: ["turboprop-01-start.txt", "turboprop-02-takeoff-torque-itt.txt"] },
+  pt6a42: { lessons: [["pt6a42-01-start.txt", "PT6A-42 01 Ground start"], ["pt6a42-02-takeoff-torque-itt.txt", "PT6A-42 02 Takeoff: torque vs ITT"], ["pt6a42-03-hot-start.txt", "PT6A-42 03 Hot start (1,000 C limit)"]], // turboprop-05 (reverse) is withheld: at landing speed this preset's propeller overspeeds on the fine stop and its governor will not go into reverse (open calibration item, see the Rust preset)
+    replaces: ["turboprop-01-start.txt", "turboprop-02-takeoff-torque-itt.txt", "turboprop-04-hot-start.txt", "turboprop-05-reverse.txt"] },
 };
 
 export function lessonsFor(kind: KindDef, preset: string): [string, string][] {
@@ -715,7 +720,13 @@ export function kindDef(kind: string, spec?: AnySpec): KindDef {
     const oil = (spec.oil ?? {}) as Record<string, number>;
     const n2Max = l.n2_max_pct ?? 105, egtMax = l.egt_takeoff_c ?? 950;
     const oilMin = l.oil_pressure_min_psi ?? 13, oilTr = l.oil_temp_max_transient_c ?? 160;
+    const rated = ((spec.rating ?? {}) as Record<string, number>).takeoff_thrust_n ?? 1;
     return { ...def,
+      // Rating-relative signals so one lesson can grade every turbofan preset
+      signals: [...def.signals,
+        sig("thrust_pct", "Thrust, % of rated takeoff", "%", "%", id, 0, 110, 1, (s) => s.thrust_n / rated * 100),
+        sig("egt_margin", "EGT margin to the takeoff limit", "°C", "°F", (v) => v * 1.8, -100, 600, 0, (s) => egtMax - s.egt_c),
+      ],
       primary: [
         { ...def.primary[0], redline: l.n1_max_pct ?? 104 },
         { ...def.primary[1], max: egtMax > 950 ? 1100 : egtMax < 800 ? 800 : 1000, redline: egtMax, amber: [l.egt_max_continuous_c ?? egtMax - 25, egtMax] },

@@ -4,6 +4,7 @@ at 0    engine all
 at 0    running 0
 at 0    log on
 at 5    tla 1.0
+at 12   check thrust_pct >= 85
 at 15   note Engine 2 fuel supply failure at 95% N1
 at 15   engine 2
 at 15   fault fuel_pump_fail on
@@ -11,4 +12,6 @@ at 40   note Engine 2 fuel restored: auto-relight needs N2 above 20%, use the st
 at 40   fault fuel_pump_fail off
 at 42   starter on
 at 80   starter off
+at 98   check n2 >= 90
+at 98   check thrust_pct >= 95
 at 100  end

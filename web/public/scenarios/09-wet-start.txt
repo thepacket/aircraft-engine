@@ -5,6 +5,9 @@ at 0    log on
 at 0    starter on
 at 18   fuel on
 at 35   note No EGT rise within 15 s of fuel on: WET START, abort
+at 38   check egt < 100
+at 38   check ff > 0.01
 at 40   fuel off
 at 70   starter off
+at 78   check ff < 0.001
 at 80   end

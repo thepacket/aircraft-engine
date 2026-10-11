@@ -4,6 +4,10 @@ at 0    mach 0.5
 at 0    running 0.5
 at 0    log on
 at 10   fuel off
+at 58   check ff < 0.001
+at 58   check n2 >= 15
 at 60   note Windmilling: N2 should be above 20% for a windmill start
 at 60   fuel on
+at 148  check n2 >= 70
+at 148  check thrust_pct > 5
 at 150  end

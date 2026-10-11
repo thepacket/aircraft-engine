@@ -3,5 +3,12 @@
 at 0    running 0
 at 0    log on
 at 10   note Fuel lever to CUTOFF
+at 9    check n2 >= 50
 at 10   fuel off
+at 40   check ff < 0.001
+at 40   check n2 < 30
+at 148  note N2 is stopped; the fan is still turning in the breeze
+at 148  check n2 < 2
+at 148  check n1 > 0.5
+at 148  check egt < 150
 at 150  end

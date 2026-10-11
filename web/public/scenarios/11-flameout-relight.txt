@@ -6,11 +6,17 @@ at 0    running 0.5
 at 0    log on
 at 10   note Flameout at FL150: windmilling core above 20% N2, auto-relight
 at 10   fault flameout
+at 30   check n2 >= 60
+at 30   check thrust_pct > 5
 at 60   alt 10668
 at 60   mach 0.78
 at 60   tla 0.62
 at 90   note Flameout at FL350: above the relight envelope
 at 90   fault flameout
+at 125  check n2 < 50
+at 125  check thrust < 0
 at 130  note Descend below 30,000 ft: relight
 at 130  alt 8500
+at 178  check n2 >= 60
+at 178  check thrust_pct > 5
 at 180  end

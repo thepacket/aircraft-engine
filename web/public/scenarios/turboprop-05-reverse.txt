@@ -9,8 +9,13 @@ at 5    note Touchdown: power lever to beta (flat pitch)
 at 5    ctl power_lever 0
 at 8    note Max reverse
 at 8    ctl power_lever -0.3
+at 14   check beta <= -10
+at 14   check thrust < -5
+at 14   check ng >= 65
 at 15   mach 0.06
 at 20   mach 0.03
 at 25   note Out of reverse below 40 kt (FOD / ground vortex)
 at 25   ctl power_lever 0
+at 38   check beta > 0
+at 38   check thrust > -1
 at 40   end

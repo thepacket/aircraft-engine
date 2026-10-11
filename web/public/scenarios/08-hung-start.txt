@@ -5,5 +5,9 @@ at 0    log on
 at 0    starter on
 at 18   fuel on
 when n2 >= 30  note Starter cut out early: N2 stalls, EGT rising slowly. Abort: fuel CUTOFF
+at 55   check egt > 300
+at 55   check n2 > 20
+at 55   check n2 < 45
 at 60   fuel off
+at 98   check ff < 0.001
 at 100  end

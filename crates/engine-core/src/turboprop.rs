@@ -269,6 +269,10 @@ impl TurbopropSpec {
     /// Published figures (FAA TCDS E4EA, King Air B200 POH): rating, 100 %
     /// speeds, torque / ITT / Ng / Np / oil limits, propeller. Calibration
     /// knobs are those of the PT6A-114A scaled to the larger gas generator.
+    /// Open calibration item (2026-10-11): at ground idle with 65 kt of
+    /// airspeed the propeller windmills on the fine stop at ~2,130 rpm, above
+    /// this preset's 2,000 rpm limit, so the overspeed governor refuses the
+    /// reverse range; the reverse lesson is withheld for this preset.
     pub fn pt6a_42() -> Self {
         let mut s = Self::pt6a_114a();
         s.name = "PT6A-42".into();

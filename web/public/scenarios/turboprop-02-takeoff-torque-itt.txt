@@ -6,10 +6,14 @@ at 0    running 0
 at 0    log on
 at 5    note Sea level ISA: power lever to max, torque ~1,866 ft lb, ITT ~690 C
 at 5    ctl power_lever 1
+at 22   check torque >= 1800
+at 22   check itt < 805
 at 25   ctl power_lever 0
 at 40   note Same at 2,000 m, ISA+25: ITT limited, torque down
 at 40   alt 2000
 at 40   isa 25
 at 45   ctl power_lever 1
+at 62   check torque < 1600
+at 62   check itt > 700
 at 65   ctl power_lever 0
 at 80   end
