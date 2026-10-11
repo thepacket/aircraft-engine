@@ -14,6 +14,8 @@ interface Axis {
   sizeAt: (e: PointerEvent) => number;
   min: number;
   max: () => number;
+  /** Class set on #app while the size is user-defined */
+  className?: string;
 }
 
 export function initSplitters(): void {
@@ -30,20 +32,22 @@ export function initSplitters(): void {
     sizeAt: (e) => app.getBoundingClientRect().right - parseFloat(getComputedStyle(app).paddingRight) - e.clientX,
   });
   if (hbar && eicas && center) attach(app, hbar, {
-    key: "aircraft-engine.eicas-height", cssVar: "--eicas-h", min: MIN_EICAS,
+    key: "aircraft-engine.eicas-height", cssVar: "--eicas-h", min: MIN_EICAS, className: "eicas-sized",
     max: () => Math.max(MIN_EICAS, center.clientHeight - 120),
     sizeAt: (e) => e.clientY - eicas.getBoundingClientRect().top,
   });
 }
 
 function attach(app: HTMLElement, bar: HTMLElement, axis: Axis): void {
-  const apply = (v: number): void => app.style.setProperty(axis.cssVar, `${Math.round(v)}px`);
+  const apply = (v: number): void => { app.style.setProperty(axis.cssVar, `${Math.round(v)}px`); if (axis.className) app.classList.add(axis.className); };
+  const reset = (): void => { app.style.removeProperty(axis.cssVar); if (axis.className) app.classList.remove(axis.className); };
   const clamp = (v: number): number => Math.min(Math.max(v, axis.min), axis.max());
   try {
     const saved = parseFloat(localStorage.getItem(axis.key) ?? "");
     if (Number.isFinite(saved)) apply(clamp(saved));
   } catch { /* storage unavailable */ }
 
+  bar.addEventListener("mousedown", (e) => e.preventDefault()); // no text selection while dragging
   bar.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -58,5 +62,5 @@ function attach(app: HTMLElement, bar: HTMLElement, axis: Axis): void {
     };
     bar.addEventListener("pointermove", move); bar.addEventListener("pointerup", up); bar.addEventListener("pointercancel", up);
   });
-  bar.addEventListener("dblclick", () => { app.style.removeProperty(axis.cssVar); try { localStorage.removeItem(axis.key); } catch { /* ignore */ } });
+  bar.addEventListener("dblclick", () => { reset(); try { localStorage.removeItem(axis.key); } catch { /* ignore */ } });
 }
