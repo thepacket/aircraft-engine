@@ -13,9 +13,10 @@ simulation core is Rust compiled to WebAssembly. It is a progressive web
 app: after the first visit it works offline and can be installed from the
 browser like a desktop or tablet app.
 
-Five engine families and ten engines, each validated against its published
-data. Try it at
-https://aircraftengine.fly.dev, no install needed.
+Five engine families and ten engines, each checked against its published
+data, with the gaps that remain listed in the app (Model tab, "Open items")
+rather than hidden. Try it at https://aircraftengine.fly.dev, no install
+needed.
 
 > **Educational use only.** This is a teaching tool. It is not a certified
 > flight training device, not a substitute for the aircraft flight manual or
@@ -49,23 +50,34 @@ https://aircraftengine.fly.dev, no install needed.
 - Abnormals: hot, hung and wet starts, compressor surge and surge cycling,
   flameout and auto-relight, windmill restart envelope, oil leak to seizure,
   fire drill, governor failure, instrument failure; all through injectable
-  faults and 52 scripted lessons (15 turbofan, 6 piston, 6 turboprop, 5
-  turbojet, 5 turboshaft, plus two to four per newer preset, including hot
-  starts, a surge and a flameout, with checkpoints tuned to that engine).
+  faults and 53 scripted lessons (15 turbofan, 6 piston, 6 turboprop, 5
+  turbojet, 5 turboshaft, plus two to four per newer preset with checkpoints
+  tuned to that engine; a preset with its own version of a family lesson
+  does not inherit the family's). 92 lesson/preset combinations are offered,
+  and every one of them runs in the web test suite against the real wasm.
 - Assessment: `check` and `watch` lines in a lesson script set pass/fail
-  criteria on any signal (EGT under the start limit, idle N1 in range, thrust
-  reached within a set time) and the IDE reports the results. A check the
-  script never reaches is graded as failed, so a lesson cannot pass by
-  skipping the event it demonstrates; the FAR 33.73 timing itself is checked
-  in the core's test suite, not in a lesson. Every
-  graded run is kept in the Results tab with its engine, lesson, score and
-  per-check details, and exports as CSV or JSON.
+  criteria on any signal, including the control positions (lever, starter,
+  magnetos, carb heat), so a lesson can grade the procedure as well as the
+  outcome. Consecutive `when` lines with the same condition form a stage
+  that arms only after the stages before it, so a recovery step cannot fire
+  before the failure it answers; `engine N` binds the following checks and
+  watches to that engine; a check the script never reaches is graded as
+  failed, so a lesson cannot pass by skipping the event it demonstrates.
+  Every lesson proves its event: a flameout lesson checks the flameout
+  counter, a surge lesson the surge counter, an abort that fuel is off and
+  the starter released. The FAR 33.73 timing itself is checked in the core's
+  test suite, not in a lesson. Every graded run is kept in the Results tab
+  with its engine, lesson, score and per-check details, and exports as CSV
+  or JSON; a run stopped early is recorded as incomplete.
 - Parametric sweeps: steady-state thrust, TSFC, EGT or any other signal
   against altitude, Mach, ISA deviation or lever position, with a second
   variable as curve family, plotted and exportable as CSV.
 - Validation: replay any CSV flight log (own logger output or external data),
-  drive the model from the logged levers or N1, overlay the logged channels
-  on the charts and tabulate the errors.
+  drive the model from the logged levers, mixture or condition lever, or N1,
+  overlay the logged channels on the charts and tabulate the errors. Columns
+  are matched by name and by unit suffix (`thrust_n`, `torque_pct`, `egt_c`,
+  `ff_pph`); a column in a unit the engine cannot take is left unmapped with
+  the reason shown rather than imported wrongly.
 - Twin-engine operation with per-engine lever targeting and faults.
 - Piston lessons: cold start and priming, magneto check with a fouled plug,
   takeoff and climb temperatures, leaning to peak EGT at altitude,
@@ -97,7 +109,7 @@ aircraft-engine/
 │   │   ├── src/turbojet.rs     J85-GE-5A: single spool, afterburner, variable nozzle, hydromechanical fuel control
 │   │   ├── src/any.rs          Engine-kind dispatcher (one interface for wasm and CLI)
 │   │   ├── src/logger.rs       Fixed-rate CSV data logger
-│   │   └── tests/              validation.rs (CFM56, 29), leap.rs (LEAP-1B, 6), presets.rs (V2500, PW1100G, O-320, PT6A-42, 10), piston.rs (11), turboprop.rs (12), turbojet.rs (7), turboshaft.rs (5)
+│   │   └── tests/              107 tests: validation.rs (CFM56, 29), conservation.rs (mass, energy, windmilling, 10), icao.rs (databank fuel flow), far33_73.rs (acceleration), regressions.rs (review reproductions, 8), leap.rs (6), presets.rs (10), piston.rs (11), turboprop.rs (12), turbojet.rs (8), turboshaft.rs (6)
 │   ├── engine-wasm/      wasm-bindgen bindings (one Simulator type for all engine kinds)
 │   └── engine-cli/       Native runner: `spec [kind]`, `design`, `point`, `run <script> [--engine kind]`
 ├── web/                  TypeScript IDE (Vite). Static output in web/dist
@@ -113,8 +125,10 @@ aircraft-engine/
 │   ├── src/replay.ts       CSV flight-log import, mapping, replay and comparison
 │   ├── src/share.ts        Share links (compressed state in the URL fragment)
 │   ├── src/markdown.ts     Renders docs/MODEL.md into the Model tab
+│   ├── src/sw.js           Service worker source; the build emits it with the fingerprinted files to precache
+│   ├── test/               Web test suite (node:test on an esbuild bundle with the real wasm): import round trips, runner binding, every lesson on every preset
 │   ├── public/scenarios/   Lesson scripts
-│   └── public/sw.js, manifest.webmanifest, icons/   Offline service worker and PWA manifest
+│   └── public/manifest.webmanifest, icons/   PWA manifest and icons
 ├── docs/MODEL.md         Model documentation (equations, calibration, limits)
 ├── Dockerfile, fly.toml  Static-site deployment (nginx) on Fly.io
 └── scripts/build-wasm.sh
@@ -135,6 +149,9 @@ cargo test -p engine-core
 
 # 3. Run the IDE (dev server with hot reload)
 cd web && npm install && npm run dev
+
+# 3b. Web tests: log import, scenario runner, every lesson on every preset
+cd web && npm test
 
 # 4. Production: static files only
 cd web && npm run build      # -> web/dist
@@ -211,7 +228,18 @@ at 0     ctl magnetos 3
 at 2     ctl primer 3
 at 0     ctl prop_lever 1
 when ng >= 13   ctl condition_lever 1
+# stages: these two `when` blocks run in order (the second arms after the first fires)
+when rpm < 300  ctl starter on
+when rpm >= 600 ctl starter off
+# control positions are signals too, so the procedure can be graded:
+at 59    check tla <= 0.01       # lever at idle before the reverser deploys
+at 99    check starter < 0.5     # starter released after the abort
 ```
+
+`engine N` selects the engine the following commands, checks and watches
+apply to (an open watch keeps the engine it was opened on). A check or watch
+the script never reaches, because its `when` condition never held or the
+script ended first, is graded as failed.
 
 ### The IDE
 
@@ -274,10 +302,12 @@ cargo run -p engine-cli -- run web/public/scenarios/turboprop-01-start.txt --eng
 The simulation runs in a dedicated Web Worker (so it is not throttled in a
 background tab) and the UI renders 30 state snapshots per second. The server
 only serves static files; nothing about a session leaves the browser. In
-production a service worker keeps every file it has served (app shell,
-wasm, lessons, model documentation) so the simulator keeps working
-offline; it is network-first, so a new deployment is picked up on the
-next online visit. Share
+production the build emits a service worker with the list of fingerprinted
+files (app shell, JavaScript, worker, wasm, lessons, model documentation),
+which are cached at install on the first visit, so the simulator works
+offline from then on without depending on which files happened to be
+fetched; it is network-first, so a new deployment is picked up on the next
+online visit. Share
 links put the scenario, spec and settings into the URL fragment; edits are
 also kept in the browser's local storage.
 
@@ -297,15 +327,20 @@ one is read as a turbofan spec.
 
 **Piston (O-360, PA-28-181 POH):** full-throttle static 2,350 rpm / 160 hp /
 13.6 gal/h; 8,000 ft full throttle 2,550 rpm, 72 % power, 10.6 gal/h leaned;
-idle 740 rpm at 12 inHg; magneto drop ~56 rpm each; climb CHT ~365 °F, cruise
-~300 °F; cold start needs prime, carburettor ice forms in the 10 °C humid band
-and clears with carb heat.
+idle 740 rpm at 12 inHg; magneto drop ~60 rpm each; climb CHT ~365 °F, cruise
+~300 °F; cold start needs prime; carburettor ice forms in humid air up to
+21 °C at full throttle and 38 °C at low power (AC 20-113 envelope) and
+clears with carb heat; leaning from full rich at altitude raises the rpm
+(power falls off rich of best power); a dead engine windmills from the
+propeller's own aerodynamic torque and a stopped one cools to ambient.
 
-**Turboprop (PT6A-114A, 208B POH):** 675 shp at 100 % Ng, takeoff ITT 684 °C
-and 424 lb/h, torque 1,866 ft·lb at 1,900 rpm, static thrust ~2,600 lbf;
-idle Ng 52 %, ITT ~500 °C, 136 lb/h; 10,000 ft cruise 1,390 ft·lb at 302 lb/h;
+**Turboprop (PT6A-114A, 208B POH):** 675 shp at 100 % Ng, takeoff ITT ~685 °C
+and ~445 lb/h, torque 1,866 ft·lb at 1,900 rpm, static thrust ~2,600 lbf;
+idle Ng 52 %, ITT ~500 °C, ~135 lb/h; 10,000 ft cruise 1,390 ft·lb at ~305 lb/h;
 ground start ~28 s with ITT peak ~640 °C; weak-battery hot start past 1,090 °C;
-torque limited at sea level, ITT limited hot and high.
+torque limited at sea level, ITT limited hot and high; oil pressure in the
+85–105 psi band from ~72 % Ng; the exhaust jet thrust is net of the inlet
+momentum drag.
 
 **Turbojet (J85-GE-5A, T-38A flight manual and GE data):** 2,680 lbf dry and
 3,850 lbf in afterburner by sizing (the nozzle throat for military power,
@@ -334,29 +369,33 @@ model lands on the published operating points:
 | Point | Model | Published / expected |
 |---|---|---|
 | Takeoff thrust, SL ISA | 26,300 lbf (by sizing) | 26,300 lbf |
-| Takeoff fuel flow | ~9,300 lb/h (TSFC 0.355) | ~9,000–10,000 lb/h |
-| Takeoff EGT | ~857 °C | 800–900 °C (limit 950) |
+| Takeoff fuel flow | 9,640 lb/h = 1.215 kg/s (TSFC 0.367) | ICAO databank 1.221 kg/s (−0.5 %) |
+| Takeoff EGT | ~825 °C | 800–900 °C (limit 950) |
 | Overall pressure ratio | 32.7 | 32.7 |
 | Ground idle N1 / N2 | 21 % / 60 % | 21 % / 60 % |
-| Ground idle fuel flow, EGT | ~1,350 lb/h, ~450 °C | ~1,000–1,400 lb/h, 400–480 °C |
-| Cruise FL350 M0.78, N1 85 % | ~4,200 lbf, TSFC 0.62 | 4,000–5,500 lbf, 0.60–0.65 |
+| Ground idle fuel flow, EGT | ~1,330 lb/h, ~430 °C | ~1,000–1,400 lb/h, 400–480 °C |
+| Cruise FL350 M0.78, N1 85 % | ~4,140 lbf, TSFC 0.63 | 4,000–5,500 lbf, 0.60–0.65 |
 | Flight idle to 95 % takeoff thrust (FAR 33.73(b), the applicable start point) | 4.7 s (CFM56), 4.8 s (LEAP), 4.6 s (PW1100G), 5.9 s (V2500, open item) | ≤ 5 s |
 | 15 % to 95 % takeoff thrust (the rule's fallback start point) | 4.4 s (CFM56), 4.6 s (LEAP), 3.7 s (PW1100G), 5.5 s (V2500) | ≤ 5 s |
 | Ground idle to 95 % takeoff thrust | ~6 s | lower start point than the rule's |
-| Ground start, fuel-on to idle | ~32 s, EGT peak ~600 °C | 30–60 s, limit 725 °C |
+| Ground start, fuel-on to idle | ~23 s, EGT peak ~490 °C | 30–60 s, limit 725 °C (the model is on the fast side) |
+| Fuel-off at FL350 M0.78 | −0.6 kN (windmilling drag) | negative: a dead engine is a drag |
 
 **Presets within a family** share the family's model and calibration and
 differ by their published figures: the V2527-A5 (rating, 100 % speeds, BPR
-4.8, OPR ~27.5, EGT limits of 635 / 610 °C read at the LPT exit; takeoff EGT
-~585 °C, TSFC ~0.37 and cruise ~0.63 lb/lbf/h), the O-320-E2D (150 hp at
-2,700 rpm, 7.0:1, 75 in prop; static ~2,350 rpm, 8,000 ft cruise leaned
-within the 172N POH range) and the PT6A-42 (850 shp, Ng 37,500 rpm, Np
-2,000 rpm, torque 2,230 ft·lb, ITT 800 °C; takeoff torque-limited on a
-standard day, low idle Ng ~60 %) and the PW1127G-JM geared turbofan (27,075
-lbf, BPR 12.5, OPR 40, fan at 3,281 rpm driven through a 3.0625:1 gearbox;
-the LP turbine speed is reported separately, the LP inertia is referred to
-the fan; takeoff TSFC ~0.23, cruise ~0.55, no worse than the LEAP-1B in
-this model). Each has its own validation tests in `presets.rs` with
+4.8, OPR 27.5, EGT limits of 635 / 610 °C read at the LPT exit; takeoff EGT
+~550 °C, TSFC ~0.37 and cruise ~0.64 lb/lbf/h; its fuel flow is 16 % above
+the ICAO record, open item 1), the O-320-E2D (150 hp at 2,700 rpm, 7.0:1,
+75 in prop; static ~2,350 rpm, 8,000 ft cruise leaned within the 172N POH
+range) and the PT6A-42 (850 shp, Ng 37,500 rpm, Np 2,000 rpm, torque 2,230
+ft·lb, ITT 800 °C; takeoff torque-limited on a standard day, low idle Ng
+~60 %, oil 100–135 psi; its propeller overspeeds on the fine stop at landing
+speed, open item 2) and the PW1127G-JM geared turbofan (27,075 lbf, BPR
+12.5, OPR 40, fan at 3,281 rpm driven through a 3.0625:1 gearbox; the LP
+turbine speed is reported separately, the LP inertia is referred to the
+fan; takeoff TSFC ~0.24 with the fuel flow 3 % above the ICAO record, cruise
+~0.57, about 5 % above P&W's figure and no worse than the LEAP-1B in this
+model). Each has its own validation tests in `presets.rs` with
 deliberately wide tolerances, including a deceleration-to-idle check for
 every turbofan. Adding a preset is a function that edits the family's base
 spec plus a line in `PRESETS`.
@@ -371,16 +410,21 @@ rating, geometry, 100 % speeds, bypass ratio 8.6, pressure-ratio class and
 limits (FAA TCDS E00088EN, 737 MAX FCOM, CFM data); the calibration knobs
 start from the CFM56-7B26 and are adjusted for the higher-pressure,
 two-stage-HPT cycle. Checked points: rated thrust 29,317 lbf by sizing;
-takeoff TSFC ~0.28 lb/lbf/h and EGT ~900 °C (limit 1,038 °C); cruise FL350
-M0.78 TSFC ~0.55, about 11 % below the CFM56-7B26 (published ~15 %); ground
-start and FAR 33.73 acceleration within limits.
+takeoff fuel flow 1.078 kg/s against the ICAO record's 1.070 (+0.8 %), TSFC
+~0.29 lb/lbf/h and EGT ~870 °C (limit 1,038 °C); cruise FL350 M0.78 TSFC
+~0.56, about 12 % below the CFM56-7B26 (published ~15 %); ground start and
+flight-idle acceleration within limits.
 
-Known calibration gaps: the PW1127G-JM airflow (540 kg/s) is chosen so the
-sizing lands on the rating with a plausible turbine temperature, since
-P&W does not publish it; the V2527-A5 takes ~9 s from ground idle to 95 %
-thrust, about a second more than the real engine, because its EEC trims
-fuel as the LPT-exit EGT approaches the 635 °C limit and the model trades
-the last second of spool-up for staying under that limit.
+Known calibration gaps are listed in the app and in
+[docs/MODEL.md §0](docs/MODEL.md): the V2527-A5 fuel flow (+16 %) and its
+5.9 s flight-idle acceleration, the PT6A-42 propeller overspeed that
+withholds its reverse lesson, the prescribed autorotation, and the start and
+surge transients, which match published times and limits but have no
+measured traces behind them. The PW1127G-JM airflow (540 kg/s) is chosen so
+the sizing lands on the rating with a plausible turbine temperature, since
+P&W does not publish it. The flight-idle N1 of every turbofan is a
+calibrated assumption set so the 33.73(b) go-around time is met, as the
+real approach idle is, not a published schedule.
 
 ## What is approximated
 
@@ -396,8 +440,26 @@ proprietary. They are replaced by:
   Wf/Ps3 acceleration and deceleration schedules; the LP spool integrates the
   resulting turbine power surplus, the HP spool follows its operating line.
 
+What is not approximated: mass and energy are conserved. Burner and
+cooling-air balances use one enthalpy datum, every kilogram that enters the
+inlet leaves a nozzle or a bleed port, an engine without combustion makes
+drag rather than thrust, and the propeller's torque is signed so a dead
+engine windmills from the air. These are pinned by `tests/conservation.rs`.
+
 The whole model is in the JSON spec shown in the IDE, so every assumption can
 be inspected and changed.
+
+## Review and verification
+
+The model and the IDE went through nine rounds of independent read-only
+review (physics, control logic, web layer, lesson content), each finding
+reproduced numerically, fixed, and pinned by a regression test; the lesson
+checks were then audited by mutation (642 single-step omissions in the
+scripts, 395 caught by the checks; the survivors are redundant settings,
+valid alternatives, or steps with no physical signature). The counts to
+expect: `cargo test -p engine-core` 107 passed, 4 ignored;
+`cd web && npm test` 105 passed. What the reviews left open is in the app's
+Model tab under "Open items".
 
 ## Sources
 

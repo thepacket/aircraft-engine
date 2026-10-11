@@ -75,6 +75,12 @@ Station numbering follows SAE ARP 755: 2 fan face, 13 fan exit bypass, 25
 booster exit, 3 HPC exit, 4 combustor exit, 45 HPT exit, 5 LPT exit, 9 core
 nozzle exit, 19 bypass nozzle exit. Gas properties are constant per stream:
 air cp = 1004.5 J/kg·K, γ = 1.4; combustion gas cp = 1156 J/kg·K, γ = 1.333.
+Wherever the two streams meet (burner, cooling-air mixing) enthalpies are
+measured from one datum, T_ref = 298.15 K, the reference temperature of the
+fuel heating value, so that energy is conserved across the change of cp.
+The suite `tests/conservation.rs` closes the mass balance (inlet + fuel =
+nozzles + bleed) and the energy balance (burner + HPT + cooling mix) to
+floating-point precision at every operating point it samples.
 
 ### 3.1 Component characteristics (the stand-in for the maps)
 
@@ -114,22 +120,29 @@ applied 2→13 (fan, bypass stream), 2→25 (fan hub + booster) and 25→3 (HPC)
   turbine work, which is why EGT rises and thrust drops when bleed is on.
 - **Variable bleed valves** open below ~75 % N2c and dump up to 20 % of the
   booster flow into the bypass duct. The dumped air has absorbed booster work,
-  so it adds to the LPT load at low speed.
+  so it adds to the LPT load at low speed; it joins the fan stream (mixed at
+  the fan exit pressure) and leaves through the bypass nozzle, and the inlet
+  flow and ram drag count it once (`W_inlet = W2 + W_vbv`).
 - **Variable stator vanes** are scheduled against N2c for display only.
 
 ### 3.4 Combustor
 
 Energy balance with burner efficiency η_b (0.995) and fuel heating value
-LHV (43.0 MJ/kg), 5 % total pressure loss:
+LHV (43.0 MJ/kg), 5 % total pressure loss, enthalpies from T_ref:
 
 ```
 W_b = W25 (1 − f_c − f_bleed)
-Wf  = W_b · cp_g (T4 − T3) / (η_b LHV − cp_g T4)
+W_b cp_a (T3 − T_ref) + Wf η_b LHV = (W_b + Wf) cp_g (T4 − T_ref)
+Wf  = W_b (cp_g (T4 − T_ref) − cp_a (T3 − T_ref)) / (η_b LHV − cp_g (T4 − T_ref))
 Pt4 = 0.95 Pt3
 ```
 
 and its inverse `T4(Wf)` is used whenever the fuel flow is the known quantity
-(start, transients).
+(start, transients). The same `burner_fuel` / `burner_t_out` pair serves the
+turboprop and turbojet main burners and, with cp_g on both sides, the
+afterburner. (An earlier form with cp_g on both sides of the balance and no
+common datum left a residual of several megawatts at takeoff; the ICAO
+fuel-flow comparison in §9 was made after the correction.)
 
 ### 3.5 Turbines
 
@@ -148,8 +161,17 @@ Turbine pressure ratio from the temperature drop and isentropic efficiency:
 π_t = (1 − (ΔT/Tt,in) / η_t)^(−γ/(γ−1))
 ```
 
-The cooling air is mixed in after the HPT. The EGT probe of the CFM56-7B sits
-at the LPT stage-2 nozzle, so the model reports `EGT = T45 − 0.15 ΔT_LPT`.
+The cooling air is mixed in after the HPT at constant pressure, on the T_ref
+datum: `T45 = T_ref + (W4 cp_g (T45,u − T_ref) + f_c W25 cp_a (T3 − T_ref)) / (W5 cp_g)`.
+The EGT probe of the CFM56-7B sits at the LPT stage-2 nozzle, so the model
+reports `EGT = T45 − 0.15 ΔT_LPT`.
+
+**Without combustion** (cold cranking, windmilling, fuel off in flight) no
+turbine does work, so nothing can drive a pressure rise: each compressor and
+turbine is then a 3 % total-pressure loss at unchanged temperature. The
+nozzle pressures fall below the inlet total pressure and the net thrust is
+negative, which is the windmilling drag of a dead engine (about −0.6 kN for
+the CFM56-7B26 at FL350 M0.78). The flows keep their windmilling values.
 
 ### 3.6 Nozzles and thrust
 
@@ -162,11 +184,14 @@ critical ratio `((γ+1)/2)^(γ/(γ−1))`:
   `V = √(γ R T_exit)`, pressure thrust `(p_exit − p0) A`.
 
 ```
-F_net = W5 V9 + (p9 − p0) A9 + W13 V19 + (p19 − p0) A19 − W2 V0
+W19   = W13 + W_vbv
+F_net = W5 V9 + (p9 − p0) A9 + W19 V19 + (p19 − p0) A19 − (W2 + W_vbv) V0
 ```
 
-The reverser turns a fraction (55 % at full deployment) of the bypass thrust
-forward: `F_net = F_core + (1 − r) F_bypass − r·0.55·F_bypass − ram drag`.
+The net thrust is not clamped at zero: below flight idle in cruise, or
+windmilling, it is a drag. The reverser turns a fraction (55 % at full
+deployment) of the bypass thrust forward:
+`F_net = F_core + (1 − r) F_bypass − r·0.55·F_bypass − ram drag`.
 
 ### 3.7 Closure: what fixes T4
 
@@ -201,8 +226,13 @@ The thrust lever angle (0 … 1) is mapped onto corrected N1:
 N1c,cmd = N1c,idle + (N1c,max − N1c,idle) · TLA^1.3
 ```
 
-- **Idle schedule**: 21 % on the ground; 27 % + 1.2 %/km once airborne (Mach
-  > 0.15); +4 % with engine anti-ice on.
+- **Idle schedule**: 21 % on the ground; 31 % + 1.2 %/km once airborne (Mach
+  > 0.15); +4 % with engine anti-ice on. The airborne (approach) idle is a
+  **calibrated assumption**, set for each preset (CFM56 31 %, LEAP 34 %,
+  V2500 32 %, PW1100G 26 %) so that a go-around reaches 95 % thrust within
+  the 5 s of 14 CFR 33.73(b), which is how the real approach idle is chosen;
+  it is not a published schedule, and it doubles as the descent idle because
+  the model has no separate approach mode.
 - **Takeoff rating**: 100 % corrected N1, capped by the 104 % actual-speed
   limit.
 - **Flat rating**: up to ISA + 15 K the rating is a constant corrected N1.
@@ -230,8 +260,14 @@ Wf,max = (Wf/Ps3)_accel(N2c) · Ps3          Wf,min = (Wf/Ps3)_decel(N2c) · Ps3
 ```
 
 The accel limit protects the HPC from surge (too much fuel raises the burner
-back-pressure); the decel limit protects against lean blow-out and can never
-exceed the steady fuel flow. The fuel metering unit adds a 0.15 s lag. The
+back-pressure); the decel limit protects against lean blow-out. The floor is
+the larger of the decel schedule and a minimum fuel flow that scales with
+inlet pressure (`Wf,min,abs · δ`), and the whole floor is capped at 90 % of
+the steady fuel at the current speeds, so the engine always keeps authority
+to decelerate to its command at any altitude and temperature. The flameout
+criterion (fuel below half that minimum) scales with δ the same way, so a
+normal deceleration at altitude cannot be mistaken for a flameout. The fuel
+metering unit adds a 0.15 s lag. The
 small governor gain matters: a slow lever advance keeps the fuel close to the
 steady value, a slam goes straight to the accel limit. After a surge the
 accel limit is re-armed over 4 s so the FADEC cannot slam back into a stalled
@@ -251,7 +287,9 @@ J1 ω1 dω1/dt = P_excess
 
 with J1 = 40 kg·m² for the fan, booster, LPT and shaft. The HP spool is
 lighter and follows its steady operating line `N2 = f(N1)` with a 0.6 s lag
-that shortens when the engine is over-fuelled. The N2(N1) line is a fit to
+that shortens when the engine is over-fuelled. The integration step is at
+most 10 ms for every family; the time to 95 % thrust in a slam changes by
+less than 0.1 s between 50 ms and 5 ms steps (`tests/far33_73.rs`). The N2(N1) line is a fit to
 cockpit indications (idle 21/60, climb 85/92, takeoff 100/97.5).
 
 EGT during a transient comes from the actual T4, which is why an
@@ -270,7 +308,8 @@ acceleration shows an EGT overshoot that decays as the spools catch up.
 - **Sub-idle acceleration**: gross turbine acceleration from a table vs N2,
   minus rotor drag, plus starter assist until cutout at 56 %. A **hung
   start** is the point where the turbine curve meets the drag line below idle
-  (e.g. starter cut-out at 30 %). A **hot start** is a rich schedule; a
+  (e.g. starter cut-out at 30 %); it is reported after 6 s without
+  acceleration below idle whether or not the starter is still engaged. A **hot start** is a rich schedule; a
   **wet start** is fuel with no ignition. The flame is lost if N2 falls 3 %
   below the light-off speed.
 - **Shutdown**: N2 decays with an 18 s time constant, N1 with 45 s, both to
@@ -320,23 +359,32 @@ flow, bypass ratio, OPR, fan diameter), FAR 33.73 (acceleration time).
 | Point | Model | Published / expected | Notes |
 |---|---|---|---|
 | Takeoff thrust, SL ISA | 26 300 lbf | 26 300 lbf | by sizing |
-| Takeoff fuel flow / TSFC | 9 335 lb/h / 0.355 | ~9 000–10 000 / 0.35–0.38 | |
-| Takeoff EGT | 857 °C | 800–900 °C, limit 950 | new-engine margin ~90 °C |
-| T4 takeoff | 1 698 K | 1 600–1 750 K class | not published |
+| Takeoff fuel flow / TSFC | 9 641 lb/h (1.215 kg/s) / 0.367 | ICAO databank 1.221 kg/s (9 690 lb/h) / 0.368 | −0.5 %, `tests/icao.rs` |
+| Takeoff EGT | 825 °C | 800–900 °C, limit 950 | new-engine margin ~125 °C |
+| T4 takeoff | 1 647 K | 1 600–1 700 K class | not published |
 | OPR / BPR | 32.7 / 5.1 | 32.7 / 5.1 | |
 | Ground idle N1 / N2 | 21 / 60 % | 21 / 60 % | by schedule |
-| Ground idle fuel / EGT | 1 357 lb/h / 454 °C | ~1 000–1 400 / 400–480 | |
-| Cruise FL350 M0.78 N1 85 % | 4 150 lbf / TSFC 0.62 | 4 000–5 500 / 0.60–0.65 | |
+| Ground idle fuel / EGT | 1 331 lb/h / 427 °C | ~1 000–1 400 / 400–480 | |
+| Cruise FL350 M0.78 N1 85 % | 4 139 lbf / TSFC 0.633 | 4 000–5 500 / 0.60–0.65 | |
 | Flight idle → 95 % thrust (FAR 33.73(b)) | 4.7 s | ≤ 5 s | LEAP 4.8 s, PW1100G 4.6 s; V2500 5.9 s (EEC EGT limiting, open item). Flight idle N1 is a calibrated assumption chosen so this is met (as the real approach idle is), not a published schedule; it also serves as the general airborne idle |
 | 15 % → 95 % thrust (the rule's fallback start) | 4.4 s | ≤ 5 s | LEAP 4.6 s, PW1100G 3.7 s; V2500 5.5 s |
 | Ground idle → 95 % thrust | 6.1 s | — | from the lower ground idle |
 | Takeoff → idle | ~10 s | 5–10 s | decel schedule |
-| Ground start, fuel-on → idle | 27 s, EGT peak ~500 °C | 30–60 s, limit 725 °C | |
+| Ground start, fuel-on → idle | 23 s, EGT peak ~490 °C | 30–60 s, limit 725 °C | on the fast side |
 | Flat rating | EGT held above ISA+15 | TCDS: flat rated to 30 °C SL | |
+
+The same comparison for the other turbofans, at each ICAO record's own
+thrust and bleed (`tests/icao.rs`, March 2026 EASA edition of the databank):
+LEAP-1B28 1.078 vs 1.070 kg/s (+0.8 %), PW1127G-JM 0.827 vs 0.800 kg/s
+(+3.3 %), V2527-A5 1.226 vs 1.053 kg/s (+16 %, open item 1 in §0).
 
 Calibration knobs (all in the spec): flow and pressure-ratio exponents,
 efficiency fall-off, cooling fraction, the N2(N1) line, the Wf/Ps3 schedules,
-spool inertia, the start tables.
+spool inertia, the start tables. The design-point component efficiencies of
+the CFM56-7B26 are fan 0.90, booster 0.87, HPC 0.87, HPT 0.90, LPT 0.92:
+they were raised by 0.02 (HPC, HPT, LPT) when the burner balance was put on
+a common enthalpy datum, so that the takeoff fuel flow stayed on the ICAO
+record; the other turbofans carry the same offset from their own bases.
 
 ## 10. Known limitations
 
@@ -355,6 +403,7 @@ spool inertia, the start tables.
 - A running engine that falls more than 8 % below idle N2 (surge cycling,
   severe over-bleed) hands control back to the sub-idle start schedule; the
   real FADEC's sub-idle logic is more elaborate.
+- The specific gaps that the tests have measured are in §0, Open items.
 
 ---
 
@@ -378,7 +427,13 @@ T   = 2 ρ A_disc (V + vi) vi       momentum theory, iterated for vi
 
 Past the stall angle (14° positive, 10° negative) lift and drag blend to the
 flat-plate values 2 sin α cos α and 2 sin² α over 8°. For reverse thrust at
-forward speed the inflow is capped at −V/2 (vortex-ring boundary). The blade
+forward speed the inflow is capped at −V/2 (vortex-ring boundary). Torque
+and power are **signed**: with the engine dead and the aircraft moving the
+blades are driven by the airflow, the torque goes negative and it is that
+aerodynamic torque, not a scripted rpm, that windmills the propeller (an
+O-360 at 60 m/s settles near 1 530 rpm) and brakes the engine. A stopped
+piston engine stays stopped until the windmilling torque exceeds its static
+friction and compression torque. The blade
 area and pitch are calibrated to the aircraft data (static rpm and cruise rpm
 for the fixed-pitch Archer propeller; static thrust and cruise efficiency for
 the Caravan's constant-speed propeller).
@@ -398,9 +453,12 @@ The throttle is an orifice: `p − MAP = x(θ) ṁ²`, with the effective area
 shaped as `a_idle + (1 − a_idle) θ^1.8` and `x` fixed by two published points
 (full-throttle loss at rated rpm, idle MAP at idle rpm). Solving the quadratic
 gives MAP for any throttle and rpm. Carburettor heat raises the induction
-temperature 35 K and adds a small restriction; carburettor ice (OAT −7…+21 °C,
-humidity ≥ 55 %, worst at partial throttle) closes the throttle area by up to
-75 % and melts with carb heat.
+temperature 35 K and adds a small restriction. Carburettor ice forms with
+humidity ≥ 55 % between −7 °C and an upper OAT that follows the induction
+cooling: 21 °C at full throttle, extending linearly to 38 °C with the
+throttle closed (the envelope of FAA AC 20-113), fastest at partial throttle;
+it closes the throttle area by up to 75 % and melts with carb heat or in
+warmer air. The throttle interpolation of the envelope is empirical.
 
 ### 12.2 Mixture
 
@@ -422,9 +480,13 @@ P_fric = (60 kPa + 35 Pa/rpm · rpm + (p − MAP)) · V_d · rpm/120
 P_brake = P_ind − P_fric
 ```
 
-η_i = 0.40 at full load reproduces 180 hp at 2 700 rpm. Single-magneto
-running loses 7 % (slower flame); a fouled plug or a dead cylinder removes a
-cylinder. Rotor dynamics: `J dω/dt = Q_engine + Q_starter − Q_prop` with the
+η_i = 0.40 at full load reproduces 180 hp at 2 700 rpm. Slightly rich of
+stoichiometric (F/A ≈ 0.079) burns fastest and gives best power; richer than
+that the excess fuel cools the charge and the power falls as
+`1 − 60 (F/A − 0.079)²` (about −2 % at sea-level full rich, −5 % at the F/A a
+sea-level carburettor delivers at 8 000 ft), which is why leaning from full
+rich at altitude raises the rpm. Single-magneto running loses 7 % (slower
+flame); a fouled plug or a dead cylinder removes a cylinder. Rotor dynamics: `J dω/dt = Q_engine + Q_starter − Q_prop` with the
 propeller torque from section 11; the fixed-pitch propeller therefore sets
 the rpm for every throttle and airspeed.
 
@@ -436,6 +498,8 @@ the rpm for every throttle and airspeed.
   cooling; 90 s time constant.
 - Oil pressure = 10 + 0.028·rpm psi, derated hot, boosted cold (relief valve
   at 115 psi); oil temperature target OAT + 100 + 70·load − 0.3·TAS °F.
+  With the engine stopped, CHT and oil temperature decay toward ambient
+  (nothing warms a stopped engine).
 - Starting: the starter cranks at ~170 rpm; the engine fires above 90 rpm
   with magnetos on, F/A above the lean limit and either a prime charge (2–3
   shots, lasting 8 s) or a warm engine (CHT > 200 °F). Six or more shots
@@ -462,7 +526,12 @@ P_shaft = η_gearbox · W45 cp_g ΔT_PT
 ```
 
 ITT is T45, the inter-turbine temperature. η_Np reduces the PT efficiency
-away from its design speed ratio (`1 − 0.6 (1 − Np/1900)²`).
+away from its design speed ratio (`1 − 0.6 (1 − Np/1900)²`). The exhaust-stub
+jet thrust reported with the propeller thrust is **net** of the core inlet
+momentum drag, `W45 V9 − W2 V0`. Without combustion the compressor, the
+compressor turbine and the power turbine are each a 3 % total-pressure loss
+and the exhaust pressure follows from upstream (not the fixed 1.05 p0), so a
+cold engine makes no jet thrust standing still and a drag in flight.
 
 ### 13.2 Closure
 
@@ -492,7 +561,12 @@ torque 1 390 ft·lb / 302 lb/h / prop efficiency 0.84.
 
 Starter-generator motoring to 20 % Ng (12 % on a weak battery), light-off
 above 12 % Ng within 2 s, start fuel schedule scaled to the idle fuel flow,
-starter cutout at 50 %. Hot start (weak battery, rich schedule), hung start
+starter cutout at 50 %. During the start the burner temperature is computed
+from the powered cycle's compressor conditions, so the scheduled start fuel
+and the fuel the displayed cycle burns are the same number
+(`tests/regressions.rs`). Each preset's light-off acceleration table must
+reach past its own idle: the PT6A-42 (idle 60 %) has its own table, since
+the -114A's ends at 54 % and would hang it at 58 %. Hot start (weak battery, rich schedule), hung start
 (early cutout), wet start (no ignition), flameout and relight (Ng above 12 %,
 below 20 000 ft), surge margin and surge, oil leak to seizure (90 s below
 40 psi), fire and bottle, prop governor failure (frozen blade angle), ITT and
@@ -500,7 +574,11 @@ torque indication failures, chip detector light.
 
 Limits (208B POH): torque 1 970 ft·lb, ITT 805 °C continuous / 865 transient
 / 1 090 start (2 s), Ng 101.6 %, Np 1 900 (2 090 transient), oil 85–105 psi
-(40 idle), oil temperature 99 °C.
+(40 idle), oil temperature 99 °C. Oil pressure is `1.30 psi/%Ng − 8 psi`,
+regulated by a relief valve at 105 psi (the PT6A-42: `2.0 psi/% − 55 psi`,
+relief 135 psi, 100–135 normal), so it sits in the normal band from ~72 % Ng;
+oil starvation is counted only with the engine running, not while the
+starter motors it through the low-pressure range.
 
 ## 14. Known limitations, Part II
 
@@ -517,21 +595,41 @@ Limits (208B POH): torque 1 970 ft·lb, ITT 805 °C continuous / 865 transient
   turbofan's LP spool); idle shaft power is low (about 8 hp, so the
   propeller idles near 600 rpm instead of the real ~1 000); no inlet screen
   or inertial-separator pressure loss beyond a small bleed; the exhaust-stub
-  jet thrust is a momentum estimate.
+  jet thrust is a momentum estimate. The PT6A-42 preset overspeeds its
+  propeller on the fine stop at landing speed (open item 2 in §0).
+- **Turboshaft**: the rotor is a power-absorption curve and the autorotation
+  is a prescribed Nr-holding torque, not an inflow model (open item 3 in §0).
 
 ## 15. Validation tests
 
-Every number in this document is pinned by a test in `crates/engine-core/tests`:
+Every number in this document is pinned by a test in `crates/engine-core/tests`
+(107 tests, `cargo test -p engine-core`):
 
 | File | Tests | What they check |
 |---|---|---|
+| `conservation.rs` | 10 | burner energy balance and the burner + HPT + cooling balance from a common datum, mass balance with the VBVs open, windmilling drag (not thrust) for every family and cold-static turboprop exhaust, turboprop jet thrust net of inlet momentum, EGT limit independent of the order bleeds were switched, flight idle reached at FL350 at ISA, ISA−30 and ISA+20, signed propeller torque and a dead engine windmilling, piston tank bookkeeping with one tank empty |
 | `icao.rs` | 1 | takeoff fuel flow vs the ICAO databank at each record's thrust and bleed, per-preset tolerance (V2500 open at +16 %) |
 | `far33_73.rs` | 3 | flight-idle and 15 % → 95 % thrust slams for the four turbofans, step-size insensitivity |
-| `regressions.rs` | 6 | review reproductions: start fuel vs cycle, altitude decel without flameout, hung start with starter engaged, leaning raises rpm, stopped engine cools to ambient, warm-air carburettor icing |
-| `validation.rs` | 29 | turbofan: design point, takeoff, idle, cruise, monotonicity, bleed, start, FAR 33.73 accel, decel, flat rating, reverser, shutdown, cruise stability, hot/wet/hung starts, weak starter, surge recovery and cycling, flameout and relight, windmill envelope, altitude relight limit, oil starvation, fire bottle, governor failure, EGT probe, logger, spec round trip |
+| `regressions.rs` | 8 | review reproductions: start fuel equals cycle fuel, altitude deceleration without flameout at the original and current idles, hung start reported with the starter engaged, leaning raises power and rpm, stopped engine cools to ambient, warm-air carburettor icing, PT6A-42 start reaches idle without oil warnings, turboprop oil pressure in its normal band at power |
+| `validation.rs` | 29 | turbofan: design point, takeoff, idle, cruise, monotonicity, bleed, start, ground-idle acceleration, decel, flat rating, reverser, shutdown, cruise stability, hot/wet/hung starts, weak starter, surge recovery and cycling, flameout and relight, windmill envelope, altitude relight limit, oil starvation, fire bottle, governor failure, EGT probe, logger, spec round trip |
+| `leap.rs` | 6 | LEAP-1B28: design point and cycle class, cruise fuel burn vs the CFM56, start, acceleration, limits |
+| `presets.rs` | 10 | V2527-A5, PW1127G-JM, O-320-E2D, PT6A-42: design points, idle and takeoff indications, starts and accelerations, decel to idle |
 | `piston.rs` | 11 | full-throttle static, rated power, 8 000 ft cruise and leaning, peak EGT and idle cutoff, idle, cold start, magneto check with fouled plug and dead mag, carburettor ice, fuel starvation and restart, climb and cruise temperatures, logger |
 | `turboprop.rs` | 12 | sized design point, takeoff, low and high idle, cruise, torque vs ITT limits hot and high, prop governing and feather, reverse, ground start, weak-battery hot start, flameout and relight, governor failure overspeed, logger |
+| `turbojet.rs` | 8 | J85: military and afterburner sizing, idle, start, acceleration, stuck nozzle, altitude afterburner, logger |
+| `turboshaft.rs` | 6 | 250-C20B: rated power, governor droop and recovery, idle rotor, hot start, governor failure, flameout with autorotation |
 
 Three ignored tests (`tp_calib`, `prop_calib`) print steady points and search
 propeller geometry; run them with `cargo test -- --ignored --nocapture` when
 recalibrating.
+
+The web layer has its own suite (`cd web && npm test`, 105 tests, node's
+test runner on an esbuild bundle with the real wasm): the flight-log import
+round-trips every family's own logger CSV with the right units and refuses
+columns in units a signal cannot take; the scenario runner's engine binding
+for checks and watches; and every lesson offered for every preset (92
+combinations) run to completion with every check and watch passed. The
+lessons were also audited by mutation: of 642 single-step omissions in the
+scripts, 395 are caught by the checks; the survivors are redundant settings,
+valid alternatives or checklist-fidelity steps with no physical signature
+(the fire drill's first bottle discharge).
