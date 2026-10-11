@@ -732,14 +732,15 @@ impl PistonEngine {
         } else {
             0.0
         };
-        let q_prop = self.prop.torque_nm * (self.rpm.signum().max(0.0));
-        let mut domega = (q_engine + q_starter - q_prop) / j_total;
-        // Windmilling: airflow can turn a stopped prop at high airspeed
-        if !self.firing && tas > 30.0 && self.rpm < 300.0 {
-            domega += 0.5 * (tas - 30.0);
-        }
+        // Signed propeller torque: negative when the airflow drives the blades
+        // (windmilling), which is what turns a dead engine at airspeed.
+        let q_prop = self.prop.torque_nm;
+        let domega = (q_engine + q_starter - q_prop) / j_total;
         self.rpm = (self.rpm + domega * h / TAU * 60.0).max(0.0);
-        if !self.firing && q_starter <= 0.0 && self.rpm < 15.0 {
+        // A stopped engine stays stopped unless the windmilling torque beats
+        // the static friction and compression (the zero-speed fmep)
+        let q_breakaway = cb.fmep_a_pa * spec.geometry.displacement_m3 / (2.0 * TAU);
+        if !self.firing && q_starter <= 0.0 && -q_prop < q_breakaway && self.rpm < 15.0 {
             self.rpm = 0.0;
         }
 
@@ -767,9 +768,13 @@ impl PistonEngine {
             1 => self.controls.fuel_left_gal = (self.controls.fuel_left_gal - gal).max(0.0),
             2 => self.controls.fuel_right_gal = (self.controls.fuel_right_gal - gal).max(0.0),
             3 => {
+                // BOTH: draw equally; whatever one tank cannot supply comes from the other
                 let half = gal / 2.0;
-                self.controls.fuel_left_gal = (self.controls.fuel_left_gal - half).max(0.0);
-                self.controls.fuel_right_gal = (self.controls.fuel_right_gal - half).max(0.0);
+                let from_left = half.min(self.controls.fuel_left_gal);
+                let from_right = (gal - from_left).min(self.controls.fuel_right_gal);
+                let from_left = (gal - from_right).min(self.controls.fuel_left_gal);
+                self.controls.fuel_left_gal -= from_left;
+                self.controls.fuel_right_gal -= from_right;
             }
             _ => {}
         }

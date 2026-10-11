@@ -292,10 +292,10 @@ impl EngineSpec {
                 hpc_pressure_ratio: 11.1, // OPR = 2.95 * 11.1 = 32.7
                 eta_fan: 0.90,
                 eta_booster: 0.87,
-                eta_hpc: 0.85,
+                eta_hpc: 0.87,
                 eta_burner: 0.995,
-                eta_hpt: 0.88,
-                eta_lpt: 0.90,
+                eta_hpt: 0.90,
+                eta_lpt: 0.92,
                 eta_mechanical: 0.99,
                 burner_pressure_loss: 0.05,
                 cooling_bleed_fraction: 0.12,
@@ -470,9 +470,9 @@ impl EngineSpec {
         d.hpc_pressure_ratio = 14.0; // OPR = 2.90 * 14.0 = 40.6
         d.eta_fan = 0.92;
         d.eta_booster = 0.88;
-        d.eta_hpc = 0.87;
-        d.eta_hpt = 0.89;
-        d.eta_lpt = 0.91;
+        d.eta_hpc = 0.89;
+        d.eta_hpt = 0.91;
+        d.eta_lpt = 0.93;
         d.cooling_bleed_fraction = 0.16; // two cooled HPT stages, higher T4
         d.power_extraction_w = 180_000.0;
         s.spools.n1_idle_pct = 19.0;
@@ -561,8 +561,8 @@ impl EngineSpec {
         d.booster_pressure_ratio = 2.55;
         d.hpc_pressure_ratio = 10.8; // OPR = 2.55 * 10.8 = 27.5
         d.eta_fan = 0.90;
-        d.eta_hpc = 0.86;
-        d.eta_hpt = 0.89;
+        d.eta_hpc = 0.88;
+        d.eta_hpt = 0.91;
         d.cooling_bleed_fraction = 0.14;
         d.egt_probe_lpt_fraction = 0.95; // thermocouples at the LPT exit
         s.spools.n1_idle_pct = 20.0;

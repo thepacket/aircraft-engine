@@ -259,7 +259,7 @@ pub struct Engine {
     rng: Rng,
     idle_fuel_kg_s: f64,
     egt_rated_k: f64,
-    limit_cache_key: (i64, i64, i64, bool),
+    limit_cache_key: (i64, i64, i64, i64),
     last_cycle: CycleResult,
     warnings: Vec<String>,
     max_substep_s: f64,
@@ -353,7 +353,7 @@ impl Engine {
             rng: Rng(0x9E3779B97F4A7C15),
             idle_fuel_kg_s,
             egt_rated_k,
-            limit_cache_key: (i64::MIN, 0, 0, false),
+            limit_cache_key: (i64::MIN, 0, 0, 0),
             last_cycle: cold,
             warnings: Vec::new(),
             max_substep_s: 0.02,
@@ -462,7 +462,8 @@ impl Engine {
             (self.environment.altitude_m / 50.0).round() as i64,
             (self.environment.mach * 100.0).round() as i64,
             (self.environment.delta_isa_k * 2.0).round() as i64,
-            self.controls.anti_ice || self.controls.pack_bleed,
+            // The EGT-limited N1 depends on how much is bled, not just whether
+            (self.bleed_fraction() * 1000.0).round() as i64,
         );
         self.n1_idle = self.idle_n1_corrected() * inl.theta.sqrt();
         if key == self.limit_cache_key {
@@ -730,9 +731,11 @@ impl Engine {
                 let demand = ss.wf_kg_s + fd.governor_gain_kg_s_per_pct * (self.n1_cmd - self.n1);
                 let n2c_pct = self.n2 / st;
                 self.wf_max = interp(&fd.accel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0;
-                // The decel floor protects against lean blow-out; it can never ask
-                // for more than the steady fuel (that would be over-fuelling).
-                self.wf_min = (interp(&fd.decel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0).max(fd.min_fuel_kg_s.min(ss.wf_kg_s));
+                // The decel floor protects against lean blow-out. The minimum
+                // fuel scales with inlet pressure like the Wf/Ps3 schedule, and
+                // it stays below the steady fuel at the current speed so the
+                // engine always keeps authority to decelerate to the command.
+                self.wf_min = (interp(&fd.decel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0).max((fd.min_fuel_kg_s * inl.delta).min(0.9 * ss.wf_kg_s));
                 // Transient EGT limiting: blend the accel limit down to the steady
                 // fuel as the sensed EGT approaches the takeoff limit.
                 if fd.egt_transient_margin_c > 0.0 {

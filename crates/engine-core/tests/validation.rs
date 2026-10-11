@@ -93,7 +93,8 @@ fn cruise_point_is_realistic() {
 #[test]
 fn thrust_and_fuel_increase_monotonically_with_n1() {
     for (alt, mach) in [(0.0, 0.0), (0.0, 0.25), (3_000.0, 0.5), (10_668.0, 0.78)] {
-        let mut last_thrust = -1.0;
+        // Below flight idle in cruise the net thrust is a drag (negative)
+        let mut last_thrust = f64::NEG_INFINITY;
         let mut last_wf = -1.0;
         let mut n1 = 21.0;
         while n1 <= 104.0 {

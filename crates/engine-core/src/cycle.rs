@@ -22,6 +22,13 @@ use serde::{Deserialize, Serialize};
 pub const CP_AIR: f64 = 1004.5;
 pub const CP_GAS: f64 = 1156.0;
 pub const GAMMA_GAS: f64 = 1.333;
+/// Reference temperature of the fuel heating value (K). Enthalpies on both
+/// sides of a burner balance are measured from here, so air (cp_air) and
+/// combustion gas (cp_gas) share one datum.
+pub const T_REF: f64 = 298.15;
+/// Total-pressure loss across each unpowered (windmilling) turbomachine. With
+/// no combustion there is no shaft work: the blading is a drag, not a pump.
+pub const WINDMILL_PT_LOSS: f64 = 0.03;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Station {
@@ -140,20 +147,33 @@ fn turbine_pr(tt_in: f64, dt: f64, eta: f64) -> f64 {
     ratio_s.powf(-1.0 / k)
 }
 
-/// Combustor energy balance: fuel flow required to raise `w` kg/s from t3 to t4.
+/// Burner energy balance, enthalpies measured from [`T_REF`]:
+///   w cp_in (t_in - T_REF) + wf eta LHV = (w + wf) cp_gas (t_out - T_REF)
+/// Fuel flow needed to take `w` kg/s of a stream with heat capacity `cp_in`
+/// from `t_in` to `t_out`.
+pub fn burner_fuel(w: f64, cp_in: f64, t_in: f64, t_out: f64, eta: f64, lhv: f64) -> f64 {
+    let num = w * (CP_GAS * (t_out - T_REF) - cp_in * (t_in - T_REF));
+    let den = eta * lhv - CP_GAS * (t_out - T_REF);
+    (num / den).max(0.0)
+}
+
+/// Inverse of [`burner_fuel`]: outlet temperature for a given fuel flow.
+/// Beyond roughly stoichiometric the extra fuel does not burn (`t_max`).
+pub fn burner_t_out(w: f64, cp_in: f64, t_in: f64, wf: f64, eta: f64, lhv: f64, t_max: f64) -> f64 {
+    let t = T_REF + (wf * eta * lhv + w * cp_in * (t_in - T_REF)) / ((w + wf) * CP_GAS);
+    t.min(t_max)
+}
+
+/// Main combustor: fuel flow required to raise `w` kg/s of air from t3 to t4.
 pub fn fuel_for_t4(spec: &EngineSpec, w: f64, t3: f64, t4: f64) -> f64 {
     let d = &spec.design_point;
-    let num = w * CP_GAS * (t4 - t3);
-    let den = d.eta_burner * d.fuel_lhv_j_kg - CP_GAS * t4;
-    (num / den).max(0.0)
+    burner_fuel(w, CP_AIR, t3, t4, d.eta_burner, d.fuel_lhv_j_kg)
 }
 
 /// Inverse of [`fuel_for_t4`].
 pub fn t4_for_fuel(spec: &EngineSpec, w: f64, t3: f64, wf: f64) -> f64 {
     let d = &spec.design_point;
-    let t4 = (wf * d.eta_burner * d.fuel_lhv_j_kg + w * CP_GAS * t3) / ((w + wf) * CP_GAS);
-    // Beyond roughly stoichiometric the extra fuel does not burn
-    t4.min(2_400.0)
+    burner_t_out(w, CP_AIR, t3, wf, d.eta_burner, d.fuel_lhv_j_kg, 2_400.0)
 }
 
 /// Operating condition inputs to the cycle.
@@ -248,7 +268,22 @@ pub fn cold_section(spec: &EngineSpec, inlet: &Inlet, n1c: f64, n2c: f64) -> Col
 /// Full cycle evaluation at a given operating point.
 pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult {
     let d = &spec.design_point;
-    let cs = cold_section(spec, inlet, input.n1c, input.n2c);
+    let mut cs = cold_section(spec, inlet, input.n1c, input.n2c);
+    if !input.combustion {
+        // No combustion, no turbine work, so nothing can drive a pressure rise:
+        // the spools windmill at the speed where the blading is a pure loss.
+        // Flows keep their windmilling values; temperatures are unchanged.
+        let l = 1.0 - WINDMILL_PT_LOSS;
+        cs.fpr = l;
+        cs.lpr = l;
+        cs.hpr = l;
+        cs.tt13 = inlet.tt2_k;
+        cs.tt25 = inlet.tt2_k;
+        cs.tt3 = inlet.tt2_k;
+        cs.pt13 = inlet.pt2_pa * l;
+        cs.pt25 = inlet.pt2_pa * l;
+        cs.pt3 = inlet.pt2_pa * l * l;
+    }
     let p0 = inlet.ambient.pressure_pa;
     let v0 = inlet.true_airspeed_m_s;
 
@@ -281,7 +316,7 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
     let dt_hpt = hpt_power / (w4 * CP_GAS);
     let tt45_uncooled = t4 - dt_hpt;
     let tf = |eta: f64, n: f64| eta * (1.0 - d.turbine_efficiency_falloff * (1.0 - n.min(1.0)).powi(2));
-    let hpt_pr = if input.combustion { turbine_pr(t4, dt_hpt, tf(d.eta_hpt, cs.n2)) } else { 1.0 };
+    let hpt_pr = if input.combustion { turbine_pr(t4, dt_hpt, tf(d.eta_hpt, cs.n2)) } else { 1.0 / (1.0 - WINDMILL_PT_LOSS) };
     let pt45 = pt4 / hpt_pr;
     // Cooling air returns downstream of the HPT
     let tt45 = (w4 * CP_GAS * tt45_uncooled + fc * cs.w25 * CP_AIR * cs.tt3) / (w5 * CP_GAS);
@@ -289,25 +324,34 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
     // LPT
     let dt_lpt = lpt_power / (w5 * CP_GAS);
     let tt5 = tt45 - dt_lpt;
-    let lpt_pr = if input.combustion { turbine_pr(tt45, dt_lpt, tf(d.eta_lpt, cs.n1)) } else { 1.0 };
+    let lpt_pr = if input.combustion { turbine_pr(tt45, dt_lpt, tf(d.eta_lpt, cs.n1)) } else { 1.0 / (1.0 - WINDMILL_PT_LOSS) };
     let pt5 = pt45 / lpt_pr;
     let egt = tt45 - d.egt_probe_lpt_fraction * dt_lpt;
 
+    // Bypass duct: the VBV dump joins the fan stream (throttled to the fan
+    // exit pressure, mixed at constant pressure) and leaves through the
+    // bypass nozzle, so every kilogram that enters the inlet leaves a nozzle.
+    let w19 = cs.w13 + w_vbv;
+    let tt19 = (cs.w13 * cs.tt13 + w_vbv * cs.tt25) / w19;
+
     // Nozzles
     let core = nozzle(w5, tt5, pt5, p0, GAMMA_GAS, CP_GAS);
-    let byp = nozzle(cs.w13, cs.tt13, cs.pt13, p0, GAMMA_AIR, CP_AIR);
+    let byp = nozzle(w19, tt19, cs.pt13, p0, GAMMA_AIR, CP_AIR);
     let a9 = input.a9_m2.unwrap_or(core.required_area_m2);
     let thrust_core = w5 * core.exit_velocity_m_s + (core.exit_static_pressure_pa - p0) * a9.min(core.required_area_m2 * 2.0);
-    let thrust_byp = cs.w13 * byp.exit_velocity_m_s + (byp.exit_static_pressure_pa - p0) * byp.required_area_m2;
-    let ram_drag = (cs.w2 + w_vbv) * v0;
+    let thrust_byp = w19 * byp.exit_velocity_m_s + (byp.exit_static_pressure_pa - p0) * byp.required_area_m2;
+    // Inlet momentum drag of everything that entered the engine: the fan-face
+    // flow is w2 (fan stream + HPC flow) plus the booster flow the VBVs dump
+    let w_inlet = cs.w2 + w_vbv;
+    let ram_drag = w_inlet * v0;
     // Reverser: deployed blocker doors turn the bypass stream forward
     let rev = input.reverser.clamp(0.0, 1.0);
     let thrust_reverse = rev * input.reverser_efficiency * thrust_byp;
+    // Negative net thrust is real: a windmilling or idling engine in flight is a drag
     let net = thrust_core + (1.0 - rev) * thrust_byp - thrust_reverse - ram_drag;
-    let net = if rev > 0.0 { net } else { net.max(0.0) };
 
     // Efficiencies
-    let ke_rate = 0.5 * (w5 * core.exit_velocity_m_s.powi(2) + cs.w13 * byp.exit_velocity_m_s.powi(2) - cs.w2 * v0 * v0);
+    let ke_rate = 0.5 * (w5 * core.exit_velocity_m_s.powi(2) + w19 * byp.exit_velocity_m_s.powi(2) - w_inlet * v0 * v0);
     let net_for_eff = net.max(0.0);
     let fuel_power = wf * d.fuel_lhv_j_kg;
     let thermal = if fuel_power > 0.0 { (ke_rate / fuel_power).clamp(0.0, 1.0) } else { 0.0 };
@@ -317,7 +361,7 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
     let st = |id: &str, label: &str, tt: f64, pt: f64, w: f64| Station { id: id.to_string(), label: label.to_string(), tt_k: tt, pt_pa: pt, w_kg_s: w };
     let stations = vec![
         st("0", "Freestream", inlet.ambient.temperature_k, p0, 0.0),
-        st("2", "Fan face", inlet.tt2_k, inlet.pt2_pa, cs.w2),
+        st("2", "Fan face", inlet.tt2_k, inlet.pt2_pa, w_inlet),
         st("13", "Fan exit (bypass)", cs.tt13, cs.pt13, cs.w13),
         st("25", "Booster exit / HPC inlet", cs.tt25, cs.pt25, cs.w25),
         st("3", "HPC exit / combustor inlet", cs.tt3, cs.pt3, cs.w25),
@@ -325,7 +369,7 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
         st("45", "HPT exit / LPT inlet", tt45, pt45, w5),
         st("5", "LPT exit", tt5, pt5, w5),
         st("9", "Core nozzle exit", core.exit_temperature_k, core.exit_static_pressure_pa, w5),
-        st("19", "Bypass nozzle exit", byp.exit_temperature_k, byp.exit_static_pressure_pa, cs.w13),
+        st("19", "Bypass nozzle exit", byp.exit_temperature_k, byp.exit_static_pressure_pa, w19),
     ];
 
     CycleResult {
@@ -334,7 +378,7 @@ pub fn cycle(spec: &EngineSpec, inlet: &Inlet, input: CycleInput) -> CycleResult
         vbv_dump_kg_s: w_vbv,
         ps3_kpa: cs.pt3 * 0.97 / 1000.0,
         thrust_reverse_n: thrust_reverse,
-        w2_kg_s: cs.w2,
+        w2_kg_s: w_inlet,
         w13_kg_s: cs.w13,
         w25_kg_s: cs.w25,
         wf_kg_s: wf,

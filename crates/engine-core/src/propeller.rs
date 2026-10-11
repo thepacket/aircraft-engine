@@ -5,7 +5,9 @@
 //! right behaviour: thrust and torque rise with the square of rpm, efficiency
 //! depends on advance ratio, the blade stalls at high angle of attack (static
 //! runs), feather gives near-zero torque, and negative pitch gives reverse
-//! thrust.
+//! thrust. Torque and power are signed: a windmilling propeller (airflow
+//! driving the blades) returns negative torque, which is what spins the shaft
+//! and brakes the engine.
 
 use serde::{Deserialize, Serialize};
 
@@ -101,12 +103,12 @@ pub fn prop_forces(p: &PropSpec, rho: f64, speed_of_sound: f64, v: f64, rpm: f64
     let omega = 2.0 * std::f64::consts::PI * n;
     let power = torque * omega;
     let j = if n > 0.01 { v / (n * p.diameter_m) } else { 0.0 };
-    let eff = if power > 1.0 && v > 0.0 { (thrust * v / power).clamp(0.0, 1.0) } else { 0.0 };
+    let eff = if power > 1.0 && v > 0.0 && thrust > 0.0 { (thrust * v / power).clamp(0.0, 1.0) } else { 0.0 };
     let tip_speed = (2.0 * std::f64::consts::PI * n * 0.5 * p.diameter_m).hypot(v);
     PropForces {
         thrust_n: thrust,
-        torque_nm: torque.max(0.0),
-        power_w: power.max(0.0),
+        torque_nm: torque,
+        power_w: power,
         beta_deg,
         alpha_deg: alpha.to_degrees(),
         advance_ratio: j,

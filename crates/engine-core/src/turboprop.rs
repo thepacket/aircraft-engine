@@ -10,7 +10,7 @@
 //! P&WC PT6A-114A maintenance / operating data (published figures).
 
 use crate::atmosphere::{inlet as inlet_conditions, isa, Inlet};
-use crate::cycle::{nozzle, CP_AIR, CP_GAS, GAMMA_GAS};
+use crate::cycle::{burner_fuel, burner_t_out, nozzle, CP_AIR, CP_GAS, GAMMA_GAS, WINDMILL_PT_LOSS};
 use crate::logger::DataLogger;
 use crate::propeller::{governor_step, prop_forces, PropForces, PropSpec};
 use crate::spec::interp;
@@ -494,12 +494,12 @@ fn turbine_pr(tt_in: f64, dt: f64, eta: f64) -> f64 {
 
 fn fuel_for_t4(spec: &TurbopropSpec, w: f64, t3: f64, t4: f64) -> f64 {
     let d = &spec.design_point;
-    (w * CP_GAS * (t4 - t3) / (d.eta_burner * d.fuel_lhv_j_kg - CP_GAS * t4)).max(0.0)
+    burner_fuel(w, CP_AIR, t3, t4, d.eta_burner, d.fuel_lhv_j_kg)
 }
 
 fn t4_for_fuel(spec: &TurbopropSpec, w: f64, t3: f64, wf: f64) -> f64 {
     let d = &spec.design_point;
-    ((wf * d.eta_burner * d.fuel_lhv_j_kg + w * CP_GAS * t3) / ((w + wf) * CP_GAS)).min(2_300.0)
+    burner_t_out(w, CP_AIR, t3, wf, d.eta_burner, d.fuel_lhv_j_kg, 2_300.0)
 }
 
 /// Gas generator at corrected speed `ngc` (fraction) and turbine inlet
@@ -510,9 +510,10 @@ pub fn tp_cycle(spec: &TurbopropSpec, inlet: &Inlet, ngc: f64, t4: f64, combusti
     let n = ngc.max(0.0);
     let corr = inlet.delta / inlet.theta.sqrt();
     let w2 = (d.mass_flow_kg_s * corr * n.powf(d.flow_exponent)).max(1e-3);
-    let pr = 1.0 + (d.compressor_pressure_ratio - 1.0) * n.powf(d.pr_exponent);
     let fo = |eta: f64| eta * (1.0 - d.efficiency_falloff * (1.0 - n.min(1.0)).powi(2));
-    let tt3 = compress(inlet.tt2_k, pr, fo(d.eta_compressor));
+    // Unpowered (windmilling) the compressor is a loss, not a pump
+    let pr = if combustion { 1.0 + (d.compressor_pressure_ratio - 1.0) * n.powf(d.pr_exponent) } else { 1.0 - WINDMILL_PT_LOSS };
+    let tt3 = if combustion { compress(inlet.tt2_k, pr, fo(d.eta_compressor)) } else { inlet.tt2_k };
     let pt3 = inlet.pt2_pa * pr;
     let fc = d.cooling_bleed_fraction + bleed;
     let w_b = w2 * (1.0 - fc);
@@ -525,7 +526,7 @@ pub fn tp_cycle(spec: &TurbopropSpec, inlet: &Inlet, ngc: f64, t4: f64, combusti
     let ct_power = if combustion { comp_power / d.eta_mechanical } else { 0.0 };
     let dt_ct = ct_power / (w4 * CP_GAS);
     let tt45_u = t4 - dt_ct;
-    let ct_pr = if combustion { turbine_pr(t4, dt_ct, fo(d.eta_ct)) } else { 1.0 };
+    let ct_pr = if combustion { turbine_pr(t4, dt_ct, fo(d.eta_ct)) } else { 1.0 / (1.0 - WINDMILL_PT_LOSS) };
     let pt45 = pt4 / ct_pr;
     let tt45 = (w4 * CP_GAS * tt45_u + d.cooling_bleed_fraction * w2 * CP_AIR * tt3) / (w45 * CP_GAS);
     // Power turbine expands to the exhaust duct pressure
@@ -539,7 +540,9 @@ pub fn tp_cycle(spec: &TurbopropSpec, inlet: &Inlet, ngc: f64, t4: f64, combusti
     let pt_power = w45 * CP_GAS * dt_pt;
     let shaft_power = (pt_power * spec.gearbox.efficiency).max(0.0);
     let ex = nozzle(w45, tt5, pt5, p0, GAMMA_GAS, CP_GAS);
-    let jet_thrust = w45 * ex.exit_velocity_m_s;
+    // Net jet thrust: exhaust momentum less the inlet momentum drag of the
+    // core airflow (the propeller thrust already accounts for its own inflow)
+    let jet_thrust = w45 * ex.exit_velocity_m_s - w2 * inlet.true_airspeed_m_s;
     // PT nozzle guide vane continuity. The vanes choke once the power turbine
     // pressure ratio exceeds the critical value; below that the flow function
     // falls with the pressure ratio, so at idle P45 stays above the exhaust
@@ -1091,7 +1094,7 @@ impl TurbopropEngine {
                 let demand = ss.wf + ctl.governor_gain_kg_s_per_pct * (self.ng_cmd - self.ng);
                 let ngc_pct = self.ng / st;
                 self.wf_max = interp(&ctl.accel_wf_p3_vs_ngc, ngc_pct) * self.ps3_kpa / 3600.0;
-                self.wf_min = (interp(&ctl.decel_wf_p3_vs_ngc, ngc_pct) * self.ps3_kpa / 3600.0).max(ctl.min_fuel_kg_s.min(ss.wf));
+                self.wf_min = (interp(&ctl.decel_wf_p3_vs_ngc, ngc_pct) * self.ps3_kpa / 3600.0).max((ctl.min_fuel_kg_s * inl.delta).min(0.9 * ss.wf));
                 if self.surge_recovery_s > 0.0 {
                     self.surge_recovery_s -= h;
                     let fr = 1.0 - self.surge_recovery_s / 4.0;
@@ -1207,12 +1210,10 @@ impl TurbopropEngine {
         let q_max = 2.5 * spec.limits.torque_max_nm;
         let q_pt = if omega_p > 5.0 { (r.shaft_power_w / omega_p).min(q_max) } else if r.shaft_power_w > 0.0 { q_max * 0.6 } else { 0.0 };
         let q_fric = 0.002 * spec.limits.torque_max_nm + 0.08 * self.np;
+        // The propeller torque is signed: windmilling in flight it goes
+        // negative and drives the shaft (engine braking) by itself.
         let domega = (q_pt - self.prop.torque_nm - q_fric) / gb.inertia_kg_m2;
         self.np = (self.np + domega * h / TAU * 60.0).max(0.0);
-        // Windmilling prop in flight
-        if r.shaft_power_w <= 0.0 && inl.true_airspeed_m_s > 20.0 && self.beta < 70.0 && self.np < 800.0 {
-            self.np += 0.4 * (inl.true_airspeed_m_s - 20.0) * h;
-        }
         self.torque_nm = if omega_p > 5.0 { q_pt } else { 0.0 };
         self.shaft_power_w = r.shaft_power_w;
         }

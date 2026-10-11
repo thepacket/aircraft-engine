@@ -15,7 +15,7 @@
 //! approximations, as for the other engine kinds.
 
 use crate::atmosphere::{inlet as inlet_conditions, isa, Inlet};
-use crate::cycle::{nozzle, CP_AIR, CP_GAS, GAMMA_GAS};
+use crate::cycle::{burner_fuel, burner_t_out, nozzle, CP_AIR, CP_GAS, GAMMA_GAS, WINDMILL_PT_LOSS};
 use crate::logger::DataLogger;
 use crate::spec::interp;
 use serde::{Deserialize, Serialize};
@@ -337,12 +337,14 @@ fn turbine_pr(tt_in: f64, dt: f64, eta: f64) -> f64 {
     (1.0 - (dt / tt_in) / eta).max(0.02).powf(-1.0 / k)
 }
 
-fn fuel_for_t(w: f64, t_in: f64, t_out: f64, eta: f64, lhv: f64) -> f64 {
-    (w * CP_GAS * (t_out - t_in) / (eta * lhv - CP_GAS * t_out)).max(0.0)
+/// Burner balance for a stream of heat capacity `cp_in` (air for the main
+/// combustor, combustion gas for the afterburner); see [`burner_fuel`].
+fn fuel_for_t(w: f64, cp_in: f64, t_in: f64, t_out: f64, eta: f64, lhv: f64) -> f64 {
+    burner_fuel(w, cp_in, t_in, t_out, eta, lhv)
 }
 
-fn t_for_fuel(w: f64, t_in: f64, wf: f64, eta: f64, lhv: f64) -> f64 {
-    ((wf * eta * lhv + w * CP_GAS * t_in) / ((w + wf) * CP_GAS)).min(2_400.0)
+fn t_for_fuel(w: f64, cp_in: f64, t_in: f64, wf: f64, eta: f64, lhv: f64) -> f64 {
+    burner_t_out(w, cp_in, t_in, wf, eta, lhv, 2_400.0)
 }
 
 /// Cycle at corrected speed `nc` (fraction), turbine inlet temperature `t4`,
@@ -352,27 +354,28 @@ pub fn tj_cycle(spec: &TurbojetSpec, inlet: &Inlet, nc: f64, t4: f64, combustion
     let n = nc.max(0.0);
     let corr = inlet.delta / inlet.theta.sqrt();
     let w2 = (d.mass_flow_kg_s * corr * n.powf(d.flow_exponent)).max(1e-3);
-    let pr = 1.0 + (d.compressor_pressure_ratio - 1.0) * n.powf(d.pr_exponent);
     let fo = |eta: f64| eta * (1.0 - d.efficiency_falloff * (1.0 - n.min(1.0)).powi(2));
-    let tt3 = compress(inlet.tt2_k, pr, fo(d.eta_compressor));
+    // Unpowered (windmilling) the compressor is a loss, not a pump
+    let pr = if combustion { 1.0 + (d.compressor_pressure_ratio - 1.0) * n.powf(d.pr_exponent) } else { 1.0 - WINDMILL_PT_LOSS };
+    let tt3 = if combustion { compress(inlet.tt2_k, pr, fo(d.eta_compressor)) } else { inlet.tt2_k };
     let pt3 = inlet.pt2_pa * pr;
     let w_b = w2 * (1.0 - d.cooling_bleed_fraction - bleed);
     let t4 = if combustion { t4.max(tt3) } else { tt3 };
-    let wf = if combustion { fuel_for_t(w_b, tt3, t4, d.eta_burner, d.fuel_lhv_j_kg) } else { 0.0 };
+    let wf = if combustion { fuel_for_t(w_b, CP_AIR, tt3, t4, d.eta_burner, d.fuel_lhv_j_kg) } else { 0.0 };
     let pt4 = pt3 * (1.0 - d.burner_pressure_loss);
     let w4 = w_b + wf;
     let comp_power = w2 * CP_AIR * (tt3 - inlet.tt2_k) + d.power_extraction_w;
     let turb_power = if combustion { comp_power / d.eta_mechanical } else { 0.0 };
     let dt_t = turb_power / (w4 * CP_GAS);
     let tt5_u = t4 - dt_t;
-    let t_pr = if combustion { turbine_pr(t4, dt_t, fo(d.eta_turbine)) } else { 1.0 };
+    let t_pr = if combustion { turbine_pr(t4, dt_t, fo(d.eta_turbine)) } else { 1.0 / (1.0 - WINDMILL_PT_LOSS) };
     let pt5 = pt4 / t_pr;
     let w5 = w2 * (1.0 - bleed) + wf;
     let tt5 = (w4 * CP_GAS * tt5_u + d.cooling_bleed_fraction * w2 * CP_AIR * tt3) / (w5 * CP_GAS);
     // Afterburner
     let wf_ab = if combustion { wf_ab.max(0.0) } else { 0.0 };
     let lit = wf_ab > 1e-6;
-    let tt7 = if lit { t_for_fuel(w5, tt5, wf_ab, d.ab_efficiency, d.fuel_lhv_j_kg) } else { tt5 };
+    let tt7 = if lit { t_for_fuel(w5, CP_GAS, tt5, wf_ab, d.ab_efficiency, d.fuel_lhv_j_kg) } else { tt5 };
     let pt7 = pt5 * (1.0 - if lit { d.ab_pressure_loss_lit } else { d.ab_pressure_loss_dry });
     let w9 = w5 + wf_ab;
     let p0 = inlet.ambient.pressure_pa;
@@ -933,7 +936,7 @@ impl TurbojetEngine {
                 let demand = ss.wf + ctl.governor_gain_kg_s_per_pct * (self.n_cmd - self.n);
                 let nc_pct = self.n / st;
                 self.wf_max = interp(&ctl.accel_wf_p3_vs_nc, nc_pct) * self.ps3_kpa / 3600.0;
-                self.wf_min = (interp(&ctl.decel_wf_p3_vs_nc, nc_pct) * self.ps3_kpa / 3600.0).max(ctl.min_fuel_kg_s.min(ss.wf));
+                self.wf_min = (interp(&ctl.decel_wf_p3_vs_nc, nc_pct) * self.ps3_kpa / 3600.0).max((ctl.min_fuel_kg_s * inl.delta).min(0.9 * ss.wf));
                 if self.surge_recovery_s > 0.0 {
                     self.surge_recovery_s -= h;
                     let fr = 1.0 - self.surge_recovery_s / 4.0;
@@ -946,7 +949,7 @@ impl TurbojetEngine {
                 wf_dyn = self.wf;
                 let d = &spec.design_point;
                 let w_b = ss.w2 * (1.0 - d.cooling_bleed_fraction - bleed);
-                self.t4 = t_for_fuel(w_b, ss.tt3, self.wf, d.eta_burner, d.fuel_lhv_j_kg);
+                self.t4 = t_for_fuel(w_b, CP_AIR, ss.tt3, self.wf, d.eta_burner, d.fuel_lhv_j_kg);
                 let ratio = (self.t4 / self.t4_ss).max(0.2);
                 let p_excess = ss.turbine_power_w * (ratio - 1.0);
                 let w = (self.n / 100.0 * spec.rating.n_100pct_rpm * TAU / 60.0).max(50.0);
@@ -960,7 +963,7 @@ impl TurbojetEngine {
                 let a8_ratio = (ss.a8_required_m2 / a8).max(0.5);
                 self.sm = ((1.0 + sm_avail / 100.0) / (ratio.powf(0.3) * a8_ratio) - 1.0) * 100.0;
                 if self.surge_timer <= 0.0 && (self.sm < 0.0 || f.trigger_surge) { self.surge_timer = 1.5; self.surge_recovery_s = 4.0; self.surge_count += 1 }
-                if f.trigger_flameout || self.wf < 0.5 * ctl.min_fuel_kg_s { self.lit = false; self.flameout_count += 1 }
+                if f.trigger_flameout || self.wf < 0.5 * ctl.min_fuel_kg_s * inl.delta { self.lit = false; self.flameout_count += 1 }
             }
         }
         if self.surge_timer > 0.0 { self.surge_timer -= h; self.warnings.push("COMPRESSOR STALL".into()) }
@@ -972,7 +975,7 @@ impl TurbojetEngine {
             if self.mode == TjMode::Starting {
                 let probe = tj_cycle(&spec, &inl, nc, inl.tt2_k, false, 0.0, a8, bleed);
                 let w_b = probe.w2 * (1.0 - spec.design_point.cooling_bleed_fraction - bleed);
-                self.t4 = t_for_fuel(w_b, probe.tt3, wf_dyn, spec.design_point.eta_burner, spec.design_point.fuel_lhv_j_kg);
+                self.t4 = t_for_fuel(w_b, CP_AIR, probe.tt3, wf_dyn, spec.design_point.eta_burner, spec.design_point.fuel_lhv_j_kg);
                 self.t4_ss = self.t4;
                 self.ff_steady = wf_dyn;
             }
