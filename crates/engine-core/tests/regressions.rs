@@ -4,6 +4,7 @@
 use engine_core::piston::{PistonEngine, PistonSpec};
 use engine_core::turbojet::{TjMode, TurbojetEngine, TurbojetSpec};
 use engine_core::turboprop::{TpMode, TurbopropEngine, TurbopropSpec};
+
 use engine_core::{Engine, EngineSpec, Mode};
 
 fn run(e: &mut Engine, seconds: f64) {
@@ -144,4 +145,43 @@ fn carburettor_ice_forms_in_warm_humid_air_at_part_throttle() {
     e.set_running(0.5);
     for _ in 0..4_800 { e.step(0.05); }
     assert_eq!(e.state().carb_ice, 0.0);
+}
+
+#[test]
+fn pt6a42_ground_start_reaches_idle_without_oil_warnings() {
+    let mut e = TurbopropEngine::new(TurbopropSpec::pt6a_42());
+    e.controls.prop_lever = 1.0;
+    e.controls.starter = true;
+    let mut fuel = false;
+    let mut t = 0.0;
+    while t < 90.0 {
+        let s = e.state();
+        if !fuel && s.ng_pct >= 13.0 { e.controls.condition_lever = 1; fuel = true; }
+        if e.controls.starter && s.ng_pct >= 52.0 { e.controls.starter = false; }
+        assert!(!s.warnings.iter().any(|w| w.starts_with("OIL STARVATION") || w.starts_with("HUNG START")), "t={t:.0}: {:?}", s.warnings);
+        if s.mode == TpMode::Running { break; }
+        e.step(0.05);
+        t += 0.05;
+    }
+    let s = e.state();
+    assert_eq!(s.mode, TpMode::Running, "start hung at Ng {:.1} %", s.ng_pct);
+    assert!(t < 60.0, "start took {t:.0} s");
+    e.controls.condition_lever = 2;
+    for _ in 0..600 { e.step(0.05); }
+    assert!(e.state().ng_pct >= 68.0, "high idle Ng {:.1}", e.state().ng_pct);
+}
+
+#[test]
+fn turboprop_oil_pressure_is_normal_at_cruise_and_takeoff_power() {
+    for (spec, lever) in [(TurbopropSpec::pt6a_114a(), 0.7), (TurbopropSpec::pt6a_114a(), 1.0), (TurbopropSpec::pt6a_42(), 0.7), (TurbopropSpec::pt6a_42(), 1.0)] {
+        let mut e = TurbopropEngine::new(spec.clone());
+        e.environment.altitude_m = 2_500.0;
+        e.environment.mach = 0.25;
+        e.controls.prop_lever = 1.0;
+        e.set_running(lever);
+        for _ in 0..600 { e.step(0.05); }
+        let s = e.state();
+        assert!(!s.warnings.iter().any(|w| w.starts_with("LOW OIL")), "{} at lever {lever}: {:?} (oil {:.0} psi, Ng {:.1})", spec.name, s.warnings, s.oil_pressure_psi, s.ng_pct);
+        assert!(s.oil_pressure_psi <= spec.oil.press_relief_psi + 0.5, "{}: {:.0} psi above the relief setting", spec.name, s.oil_pressure_psi);
+    }
 }

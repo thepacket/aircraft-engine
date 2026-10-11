@@ -10,6 +10,8 @@ when n >= 14   fuel on
 when egt >= 760  note HOT START: throttle CUTOFF, motor to cool
 when egt >= 760  fuel off
 when egt >= 760  check egt >= 760
+at 45   check ff < 0.001
 at 60   check egt < 600
 at 60   starter off
+at 69   check n < 30
 at 70   end

@@ -17,11 +17,14 @@ at 20   note Warm up at ~1,000 rpm until oil temp is in the green
 at 50   check oilp >= 25
 at 120  speed 5
 at 300  speed 1
-at 300  note Run-up: 1,800 rpm, carb heat check, then idle
+at 300  note Run-up at ~2,000 rpm: carb heat check (rpm drops ~90 with heat on), then idle
 at 300  ctl throttle 0.47
 at 300  check oilt >= 60
-at 315  check rpm >= 1700
+at 315  check rpm >= 2000
 at 320  ctl carb_heat on
+at 333  note Carb heat: warm, less dense intake air costs rpm (that drop is the check)
+at 333  check rpm <= 2020
+at 333  check rpm >= 1900
 at 335  ctl carb_heat off
 at 345  ctl throttle 0
 at 360  end

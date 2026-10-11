@@ -5,6 +5,8 @@ at 0    running 0
 at 0    log on
 at 5    note Full throttle, brakes released
 at 5    ctl throttle 1
+at 5    watch cht < 500
+at 9    check rpm >= 2200
 at 10   mach 0.11
 at 10   note Climb at 75 kt: watch CHT
 at 10   speed 5
@@ -12,8 +14,11 @@ at 30   alt 500
 at 60   alt 1000
 at 90   alt 1500
 at 120  alt 1524
-at 120  note 5,000 ft: full throttle gives only ~22 inHg. Lean to best power
+at 120  note 5,000 ft: full throttle gives only ~24.5 inHg. Lean to best power
 at 120  speed 1
 at 125  ctl mixture 0.6
+at 118  check alt >= 1500
+at 118  check map < 25.5
 at 140  mach 0.17
+at 150  check rpm >= 2400
 at 160  end

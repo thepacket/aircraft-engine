@@ -8,4 +8,8 @@ at 0    speed 5
 at 5    fault oil_leak 4
 at 5    note Oil leak 4 qt/min: watch OIL QTY, then OIL PRESS
 when oilp < 13  note LOW OIL PRESSURE: 90 s to bearing failure. Shut down now (fuel CUTOFF)
+when oilp < 13  check oilq < 6
+when oilp < 13  fuel off
+at 598  check ff < 0.001
+at 598  check n2 < 50
 at 600  end

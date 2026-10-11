@@ -8,6 +8,8 @@ at 18   fuel on
 when egt >= 750  note HOT START: EGT limit exceeded. Fuel lever CUTOFF, motor 30 s
 when egt >= 750  fuel off
 when egt >= 750  check egt >= 750
+at 55   check ff < 0.001
 at 60   check egt < 500
+at 98   check n2 < 30
 at 90   starter off
 at 100  end

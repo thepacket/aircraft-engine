@@ -459,7 +459,7 @@ async function main(): Promise<void> {
       note: (txt) => { lastNote = txt; },
       screenshot: (label) => void takeScreenshot(label),
       end: () => scenarioStop(),
-    }, (key) => { const st = focusState(); return st ? signal(key).get(st) : NaN; });
+    }, (key, t) => { const st = (t === "all" ? undefined : client.latest[t]) ?? focusState(); return st ? signal(key).get(st) : NaN; });
     runner.start(client.latest[0]?.time_s ?? 0);
     btnRun.disabled = true; btnStop.disabled = false;
   });

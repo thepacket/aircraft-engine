@@ -14,4 +14,5 @@ at 65   check ng >= 56
 at 65   check oilp >= 60
 at 70   ctl condition_lever 2
 at 70   note HIGH IDLE: Ng 70%
-at 90   end
+at 108  check ng >= 68
+at 110  end

@@ -14,6 +14,9 @@ at 40   note Same at 2,000 m, ISA+25: ITT limited, torque down
 at 40   alt 2000
 at 40   isa 25
 at 45   ctl power_lever 1
-at 60   check torque <= 2100
+at 60   check torque <= 2000
+at 60   check torque >= 1200
+at 60   check itt >= 650
+at 60   check ng >= 95
 at 65   ctl power_lever 0
 at 80   end

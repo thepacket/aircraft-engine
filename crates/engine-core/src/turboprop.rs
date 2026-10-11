@@ -135,12 +135,17 @@ pub struct TpStart {
     pub start_accel_vs_ng: Vec<[f64; 2]>,
 }
 
+fn default_relief() -> f64 { 1.0e9 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TpOil {
     pub capacity_qt: f64,
     pub full_qt: f64,
     pub press_gain_psi_per_pct: f64,
     pub press_offset_psi: f64,
+    /// Pressure relief valve setting: the pump output is regulated to this (psi)
+    #[serde(default = "default_relief")]
+    pub press_relief_psi: f64,
     pub temp_rise_idle_k: f64,
     pub temp_rise_takeoff_k: f64,
     pub temp_tau_s: f64,
@@ -226,7 +231,7 @@ impl TurbopropSpec {
                 start_fuel_schedule: vec![[12.0, 0.0045], [20.0, 0.006], [30.0, 0.0085], [40.0, 0.011], [50.0, 0.013], [54.0, 0.0135]],
                 start_accel_vs_ng: vec![[12.0, 1.2], [18.0, 2.2], [25.0, 2.8], [35.0, 3.6], [45.0, 5.0], [50.0, 6.0], [54.0, 5.8]],
             },
-            oil: TpOil { capacity_qt: 9.5, full_qt: 8.5, press_gain_psi_per_pct: 1.15, press_offset_psi: -13.0, temp_rise_idle_k: 45.0, temp_rise_takeoff_k: 70.0, temp_tau_s: 200.0, starvation_qt: 2.5, seizure_time_s: 90.0 },
+            oil: TpOil { capacity_qt: 9.5, full_qt: 8.5, press_gain_psi_per_pct: 1.30, press_offset_psi: -8.0, press_relief_psi: 105.0, temp_rise_idle_k: 45.0, temp_rise_takeoff_k: 70.0, temp_tau_s: 200.0, starvation_qt: 2.5, seizure_time_s: 90.0 },
             propeller: PropSpec {
                 diameter_m: 2.69, // 106 in, 3 blades
                 blades: 3,
@@ -290,10 +295,14 @@ impl TurbopropSpec {
         s.control.ng_inertia_kg_m2 = 0.045;
         s.start.start_fuel_schedule = vec![[12.0, 0.0055], [20.0, 0.0075], [30.0, 0.0105], [40.0, 0.0135], [50.0, 0.0160], [60.0, 0.0175], [62.0, 0.0178]];
         s.start.starter_cutout_ng_pct = 52.0;
+        // The light-off acceleration must outrun rotor drag up to this engine's
+        // 60 % low idle (the -114A table ends at 54 % and would hang at 58 %)
+        s.start.start_accel_vs_ng = vec![[12.0, 1.2], [18.0, 2.2], [25.0, 2.8], [35.0, 3.6], [45.0, 5.0], [55.0, 6.4], [60.0, 6.9], [64.0, 6.7]];
         s.oil.capacity_qt = 14.0;
         s.oil.full_qt = 12.0;
-        s.oil.press_gain_psi_per_pct = 1.35;
-        s.oil.press_offset_psi = -15.0;
+        s.oil.press_gain_psi_per_pct = 2.0;
+        s.oil.press_offset_psi = -55.0; // 65 psi at the 60 % idle, 101 psi from 78 % Ng
+        s.oil.press_relief_psi = 135.0;
         // Hartzell 4-blade, 94 in
         s.propeller.diameter_m = 2.39;
         s.propeller.blades = 4;
@@ -349,7 +358,7 @@ impl TurbopropSpec {
         s.start.starter_cutout_ng_pct = 58.0;
         s.start.start_fuel_schedule = vec![[15.0, 0.0024], [20.0, 0.0030], [30.0, 0.0043], [40.0, 0.0056], [50.0, 0.0068], [60.0, 0.0078], [65.0, 0.0082]];
         s.start.start_accel_vs_ng = vec![[15.0, 1.4], [20.0, 2.4], [25.0, 3.0], [35.0, 4.0], [45.0, 5.4], [58.0, 7.4], [63.0, 7.8], [66.0, 7.4]];
-        s.oil = TpOil { capacity_qt: 6.3, full_qt: 5.8, press_gain_psi_per_pct: 1.4, press_offset_psi: -15.0, temp_rise_idle_k: 40.0, temp_rise_takeoff_k: 65.0, temp_tau_s: 180.0, starvation_qt: 1.8, seizure_time_s: 60.0 };
+        s.oil = TpOil { capacity_qt: 6.3, full_qt: 5.8, press_gain_psi_per_pct: 1.4, press_offset_psi: -15.0, press_relief_psi: 130.0, temp_rise_idle_k: 40.0, temp_rise_takeoff_k: 65.0, temp_tau_s: 180.0, starvation_qt: 1.8, seizure_time_s: 60.0 };
         s.gearbox = Gearbox { ratio: 33_290.0 / 394.0, efficiency: 0.97, inertia_kg_m2: 1_200.0 }; // main rotor + transmission, referred to the mast
         s.limits = TpLimits {
             torque_max_nm: 420.0 * HP / (394.0 * TAU / 60.0), // 100 % torque = 420 shp at 100 % Nr
@@ -1241,10 +1250,10 @@ impl TurbopropEngine {
         if f.fire && matches!(self.mode, TpMode::Running | TpMode::Starting) { oil_target += 60.0 }
         if self.oil_qty_qt < o.starvation_qt { oil_target += 30.0 * (1.0 - self.oil_qty_qt / o.starvation_qt) }
         self.oil_temp_k += (oil_target - self.oil_temp_k) / o.temp_tau_s * h;
-        let mut press = o.press_gain_psi_per_pct * self.ng + o.press_offset_psi - 0.2 * (self.oil_temp_k - 273.15 - 80.0).max(0.0);
+        let mut press = (o.press_gain_psi_per_pct * self.ng + o.press_offset_psi).min(o.press_relief_psi) - 0.2 * (self.oil_temp_k - 273.15 - 80.0).max(0.0);
         if self.oil_qty_qt < o.starvation_qt { press *= self.oil_qty_qt / o.starvation_qt }
         self.oil_press_psi = if self.ng > 3.0 { press.max(0.0) + 0.4 * self.noise() } else { 0.0 };
-        if matches!(self.mode, TpMode::Running | TpMode::Starting) && self.oil_press_psi < spec.limits.oil_press_min_idle_psi { self.oil_starved_s += h } else { self.oil_starved_s = (self.oil_starved_s - h).max(0.0) }
+        if self.mode == TpMode::Running && self.oil_press_psi < spec.limits.oil_press_min_idle_psi { self.oil_starved_s += h } else { self.oil_starved_s = (self.oil_starved_s - h).max(0.0) }
         if self.oil_starved_s > o.seizure_time_s && !self.seized { self.seized = true; self.lit = false }
         if f.fire_bottle { if c.condition_lever == 0 { self.faults.fire = false; self.bottle_msg_timer = 0.0 } else { self.bottle_msg_timer = 5.0 } }
 

@@ -12,4 +12,5 @@ when ng >= 50   note Stabilised at low idle: Ng ~52%, ITT ~500 C, prop turning s
 at 65   check ng >= 50
 at 70   ctl condition_lever 2
 at 70   note HIGH IDLE: Ng 65%
+at 88   check ng >= 63
 at 90   end

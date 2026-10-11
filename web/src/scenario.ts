@@ -138,11 +138,14 @@ export class ScenarioRunner {
   results: CheckResult[] = [];
   private watches: { result: CheckResult; cond: Condition; worst: number; worstT: number }[] = [];
 
-  constructor(private events: ScenarioEvent[], private h: ScenarioHandlers, private read: (signal: string) => number) {}
+  /** Engine the script is currently addressing (`engine 2` -> 1); checks and watches read this engine */
+  target: number | "all" = "all";
+  constructor(private events: ScenarioEvent[], private h: ScenarioHandlers, private readSignal: (signal: string, target: number | "all") => number) {}
+  private read(signal: string): number { return this.readSignal(signal, this.target); }
 
   /** True when the run was stopped before every event fired */
   interrupted = false;
-  start(simTime: number): void { this.t0 = simTime; this.lastT = simTime; this.active = true; this.interrupted = false; this.current = ""; this.currentLine = 0; this.results = []; this.watches = []; for (const e of this.events) e.fired = false; }
+  start(simTime: number): void { this.t0 = simTime; this.lastT = simTime; this.active = true; this.interrupted = false; this.target = "all"; this.current = ""; this.currentLine = 0; this.results = []; this.watches = []; for (const e of this.events) e.fired = false; }
   /**
    * Stop early. Open watches stay open (they were not held to the end) and the
    * run is marked interrupted, so it cannot be graded as a complete run.
@@ -216,7 +219,7 @@ export class ScenarioRunner {
     this.current = `${e.cond ? "when " + e.cond.signal + e.cond.op + e.cond.value : "t+" + e.t + "s"}: ${e.cmd} ${e.arg}`;
     this.currentLine = e.line;
     switch (e.cmd) {
-      case "engine": this.h.engine(/^(all|both)$/i.test(e.arg) ? "all" : Math.max(0, n(1) - 1)); break;
+      case "engine": { this.target = /^(all|both)$/i.test(e.arg) ? "all" : Math.max(0, n(1) - 1); this.h.engine(this.target); break; }
       case "ctl": { const [name, ...rest] = e.arg.split(/\s+/); const v = parseOnOff(rest.join(" ") || "1"); if (v !== null) this.h.ctl(name, v); break; }
       case "starter": this.h.starter(on); break;
       case "fuel": this.h.fuel(on); break;

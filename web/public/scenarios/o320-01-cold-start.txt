@@ -15,13 +15,17 @@ at 20   note Warm up at ~1,000 rpm until oil temp is in the green
 at 50   check oilp >= 25
 at 120  speed 5
 at 300  speed 1
-at 300  note Run-up: 1,700 rpm, mags L and R (drop 125 rpm max, 50 rpm difference)
+at 300  note Run-up at ~2,000 rpm: mags L and R (each drops the rpm; max 175 drop, within 50 of each other)
 at 300  ctl throttle 0.45
 at 300  check oilt >= 60
-at 315  check rpm >= 1600
+at 315  check rpm >= 1990
 at 318  ctl magnetos 1
+at 325  check rpm <= 1990
+at 325  check rpm >= 1850
 at 326  ctl magnetos 3
 at 330  ctl magnetos 2
+at 337  check rpm <= 1990
+at 337  check rpm >= 1850
 at 338  ctl magnetos 3
 at 345  ctl throttle 0
 at 360  end

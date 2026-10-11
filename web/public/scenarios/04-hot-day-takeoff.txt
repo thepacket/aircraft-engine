@@ -5,6 +5,8 @@ at 0    running 0
 at 0    log on
 at 5    tla 1.0
 at 25   note Flat rating: N1 held below 100 %, EGT at or under the limit, less thrust than on a standard day
+at 25   check n1 >= 90
+at 25   check thrust_pct >= 80
 at 25   check n1 < 100
 at 25   check egt_margin >= -5
 at 25   check thrust_pct < 97

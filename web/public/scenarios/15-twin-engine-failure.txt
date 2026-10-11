@@ -8,6 +8,9 @@ at 12   check thrust_pct >= 85
 at 15   note Engine 2 fuel supply failure at 95% N1
 at 15   engine 2
 at 15   fault fuel_pump_fail on
+at 35   note Engine 2 is out: no fuel, N2 running down (checks read engine 2)
+at 35   check ff < 0.001
+at 35   check n2 < 60
 at 40   note Engine 2 fuel restored: auto-relight needs N2 above 20%, use the starter
 at 40   fault fuel_pump_fail off
 at 42   starter on

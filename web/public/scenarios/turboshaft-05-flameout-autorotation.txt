@@ -8,6 +8,8 @@ at 10   note Flameout: collective DOWN to keep Nr
 at 10   fault flameout
 at 11   ctl collective 0.05
 at 11   watch nr > 85
+at 20   check flameouts >= 1
+at 20   check ng < 50
 at 25   note Relight: starter on, throttle IDLE then FULL
 at 25   ctl starter on
 when ng >= 15   ctl throttle_twist 1
