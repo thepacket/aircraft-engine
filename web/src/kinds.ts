@@ -1,6 +1,6 @@
 // Engine-kind descriptors: everything the IDE needs to present an engine
 // (instruments, controls, faults, signals, readouts, lessons) in one place.
-import type { AnyState } from "./types";
+import type { AnyState, AnySpec } from "./types";
 import { sig, id, type Signal, U_FF, U_TEMP_C, U_TEMP_F, U_THRUST_KN, U_PCT, U_RPM, U_PSI, U_INHG, U_TORQUE, U_HP } from "./signals";
 import { fmtThrust, fmtFuelFlow, fmtMass, fmtAlt, fmtSpeed, fmtPressure, fmtMassFlow, fmtPower, fmtTemp, unitSystem } from "./units";
 
@@ -433,8 +433,26 @@ const turboprop: KindDef = {
 
 export const KINDS: Record<string, KindDef> = { turbofan, piston, turboprop };
 
-export function kindDef(kind: string): KindDef {
-  return KINDS[kind] ?? turbofan;
+/** Descriptor for an engine kind; turbofan dial limits follow the spec's limits block. */
+export function kindDef(kind: string, spec?: AnySpec): KindDef {
+  const def = KINDS[kind] ?? turbofan;
+  if (def !== turbofan || !spec?.limits) return def;
+  const l = spec.limits as Record<string, number>, oil = (spec.oil ?? {}) as Record<string, number>;
+  const n2Max = l.n2_max_pct ?? 105, egtMax = l.egt_takeoff_c ?? 950;
+  const primary: DialDef[] = [
+    { ...def.primary[0], redline: l.n1_max_pct ?? 104 },
+    { ...def.primary[1], max: egtMax > 950 ? 1100 : 1000, redline: egtMax, amber: [l.egt_max_continuous_c ?? egtMax - 25, egtMax] },
+    { ...def.primary[2], max: n2Max > 110 ? 120 : 110, redline: n2Max },
+    def.primary[3],
+  ];
+  const oilMin = l.oil_pressure_min_psi ?? 13, oilTr = l.oil_temp_max_transient_c ?? 160;
+  const secondary: DialDef[] = [
+    { ...def.secondary[0], redlineLow: oilMin, amber: [oilMin, l.oil_pressure_caution_psi ?? oilMin + 7] },
+    { ...def.secondary[1], redline: oilTr, amber: [l.oil_temp_max_continuous_c ?? oilTr - 5, oilTr] },
+    { ...def.secondary[2], max: oil.capacity_qt ?? 22 },
+    def.secondary[3],
+  ];
+  return { ...def, primary, secondary };
 }
 
 void unitSystem;

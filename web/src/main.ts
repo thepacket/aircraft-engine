@@ -40,15 +40,23 @@ async function main(): Promise<void> {
     lsDel(LS.spec);
     client = await SimClient.create(engines);
   }
+  // Restore the engine preset chosen last time (a custom spec restores itself above)
+  const storedPreset = lsGet(LS.kind);
+  if (!initialSpec && storedPreset && storedPreset !== client.preset) {
+    try { await client.setKind(storedPreset); } catch (e) { console.warn("stored engine preset rejected", e); }
+  }
   let spec: AnySpec = client.spec;
-  let kind: KindDef = kindDef(client.kind);
+  let kind: KindDef = kindDef(client.kind, spec);
   setActiveSignals(kind.signals);
   (window as unknown as { __ae: unknown }).__ae = { client, parseCsv, autoMap, Replay, KINDS };
 
   $<HTMLSelectElement>("engine-count").value = String(engines);
-  $<HTMLSelectElement>("engine-kind").value = kind.kind;
+  $<HTMLSelectElement>("engine-kind").value = client.preset || kind.kind;
   $<HTMLSelectElement>("units").value = unitSystem();
-  const setTitle = (): void => { $("engine-name").textContent = `${spec.manufacturer} ${spec.name} — ${spec.application} · core v${client.version}`; $("eicas-title").textContent = kind.eicasTitle; };
+  const setTitle = (): void => {
+    $("engine-name").textContent = `${spec.manufacturer} ${spec.name} — ${spec.application} · core v${client.version}`; $("eicas-title").textContent = kind.eicasTitle;
+    try { $("btn-spec-revert").textContent = `Revert to ${JSON.parse(client.defaultSpecJson).name}`; } catch { /* ignore */ }
+  };
   setTitle();
 
   // ---- Targets ------------------------------------------------------------
@@ -212,9 +220,9 @@ async function main(): Promise<void> {
     lsSet(LS.engines, String(engines)); client.setEngines(engines); charts.forEach((c) => c.setEngines(engines)); buildEicas(); refreshTargetRow();
   });
   const applyKind = (k: string, specJson?: string): Promise<void> => (specJson ? client.setSpec(specJson) : client.setKind(k)).then((r) => {
-    spec = r.spec; kind = kindDef(client.kind); setActiveSignals(kind.signals);
-    lsSet(LS.kind, kind.kind); if (specJson) lsSet(LS.spec, client.specJson); else lsDel(LS.spec);
-    $<HTMLSelectElement>("engine-kind").value = kind.kind;
+    spec = r.spec; kind = kindDef(client.kind, spec); setActiveSignals(kind.signals);
+    lsSet(LS.kind, client.preset || kind.kind); if (specJson) lsSet(LS.spec, client.specJson); else lsDel(LS.spec);
+    $<HTMLSelectElement>("engine-kind").value = client.preset || kind.kind;
     setTitle(); buildEicas(); buildControls(); buildFaultPanel(); buildCharts(); buildLessons(); specText.value = client.specJson; showSizing();
     setN1Hold(false, NaN, "all"); env = { alt: 0, mach: 0, disa: 0, humidity: 0.4 }; refreshEnvInputs(); pushEnv(); scenarioStop(); replayStop();
     logTable = null; mapping = null; mappingBox.innerHTML = ""; statsTable.innerHTML = ""; btnReplayRun.disabled = true;
@@ -331,7 +339,7 @@ async function main(): Promise<void> {
   showSizing();
   const applySpec = (json: string): Promise<void> => applyKind(kind.kind, json).catch((e) => { specStatus.classList.add("err"); specStatus.textContent = `Spec rejected: ${String(e)}`; });
   $("btn-spec-apply").addEventListener("click", () => void applySpec(specText.value));
-  $("btn-spec-revert").addEventListener("click", () => { lsDel(LS.spec); void applyKind(kind.kind); });
+  $("btn-spec-revert").addEventListener("click", () => { lsDel(LS.spec); void applyKind(client.preset || kind.kind); });
   $("btn-spec-open").addEventListener("click", async () => { const f = await openFile(".json"); if (f) { specText.value = f.text; void applySpec(f.text); } });
   $("btn-spec-download").addEventListener("click", () => download(`${spec.name.replace(/[^A-Za-z0-9]+/g, "_")}.json`, specText.value, "application/json"));
 

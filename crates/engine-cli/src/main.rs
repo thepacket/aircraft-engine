@@ -22,7 +22,7 @@ fn main() {
             let kind = args.get(1).map(|s| s.as_str()).unwrap_or("turbofan");
             match AnySpec::default_for(kind) {
                 Some(s) => println!("{}", s.to_json()),
-                None => { eprintln!("unknown engine kind {kind} (turbofan | piston | turboprop)"); std::process::exit(2) }
+                None => { eprintln!("unknown engine kind {kind} (turbofan | leap1b | piston | turboprop)"); std::process::exit(2) }
             }
         }
         Some("design") => {
@@ -38,12 +38,17 @@ fn main() {
     }
 }
 
-/// Steady-state cycle at one operating point: `point <n1 %> [alt m] [mach] [dISA K]`
+/// Steady-state cycle at one operating point: `point <n1 %> [alt m] [mach] [dISA K] [--engine turbofan|leap1b]`
 fn point(args: &[String]) {
     use engine_core::atmosphere::{inlet, isa};
     use engine_core::cycle::{steady_point, CycleInput};
     use engine_core::spec::interp;
-    let spec = EngineSpec::cfm56_7b26();
+    let preset = args.iter().position(|a| a == "--engine").and_then(|i| args.get(i + 1)).map(|s| s.as_str()).unwrap_or("turbofan");
+    let spec = match AnySpec::default_for(preset) {
+        Some(AnySpec::Turbofan(s)) => s,
+        _ => { eprintln!("point needs a turbofan preset (turbofan | leap1b)"); std::process::exit(2) }
+    };
+    let args: Vec<String> = args.iter().take_while(|a| !a.starts_with("--")).cloned().collect();
     let d = size_design_point(&spec);
     let n1: f64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(100.0);
     let alt: f64 = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);

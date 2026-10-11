@@ -21,6 +21,13 @@ let paused = false;
 let lastReal = 0;
 let lastPost = 0;
 let specJson = "";
+/** Preset name the current spec was loaded from ("" after a custom spec) */
+let preset = "";
+
+function presetOf(spec: string, kind: string): string {
+  try { const name = String(JSON.parse(spec).name ?? ""); if (/^LEAP-1B/i.test(name)) return "leap1b"; } catch { /* ignore */ }
+  return kind;
+}
 
 function makeSims(n: number): void {
   sims = [];
@@ -29,7 +36,8 @@ function makeSims(n: number): void {
 
 function postMeta(id?: number): void {
   const s = sims[0];
-  (self as unknown as Worker).postMessage({ type: "meta", id, kind: s.kind(), spec: s.spec_json(), sizing: s.sizing_json(), version: Simulator.version(), defaultSpec: Simulator.default_spec_json_for(s.kind()) });
+  if (!preset) preset = presetOf(s.spec_json(), s.kind());
+  (self as unknown as Worker).postMessage({ type: "meta", id, kind: s.kind(), preset, spec: s.spec_json(), sizing: s.sizing_json(), version: Simulator.version(), defaultSpec: Simulator.default_spec_json_for(preset) });
 }
 
 function tick(): void {
@@ -82,12 +90,14 @@ self.onmessage = async (ev: MessageEvent<Msg>) => {
         const probe = new Simulator(m.json);
         probe.free();
         specJson = m.json;
+        preset = "";
         for (const s of sims) s.set_spec_json(m.json);
         postMeta(m.id);
         break;
       }
       case "kind": {
         specJson = Simulator.default_spec_json_for(m.kind);
+        preset = m.kind;
         for (const s of sims) s.set_spec_json(specJson);
         postMeta(m.id);
         break;

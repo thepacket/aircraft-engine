@@ -417,6 +417,99 @@ impl EngineSpec {
         }
     }
 
+    /// CFM LEAP-1B28: 29,317 lbf takeoff thrust, Boeing 737 MAX 8/9.
+    ///
+    /// Published figures (FAA TCDS E00088EN, Boeing 737 MAX FCOM limitations,
+    /// CFM published data): rating, geometry, 100 % speeds, bypass ratio,
+    /// overall pressure ratio class, EGT / speed / oil limits. The cycle and
+    /// dynamic calibration knobs start from the CFM56-7B26 values and are
+    /// adjusted for a higher bypass, higher pressure ratio, two-stage HPT
+    /// engine of the 2010s; they are approximations, not CFM data.
+    pub fn leap_1b28() -> Self {
+        let mut s = Self::cfm56_7b26();
+        s.name = "LEAP-1B28".into();
+        s.manufacturer = "CFM International".into();
+        s.application = "Boeing 737 MAX 8 / MAX 9".into();
+        s.rating = Rating {
+            takeoff_thrust_n: 130_410.0,        // 29,317 lbf
+            max_continuous_thrust_n: 120_100.0, // ~27,000 lbf
+            flat_rating_delta_isa_k: 15.0,
+        };
+        s.geometry = Geometry {
+            fan_diameter_m: 1.763, // 69.4 in
+            length_m: 3.147,       // 123.9 in
+            dry_mass_kg: 2_780.0,  // 6,129 lb
+            fan_stages: 1,
+            booster_stages: 3,
+            hpc_stages: 10,
+            hpt_stages: 2,
+            lpt_stages: 5,
+        };
+        let d = &mut s.design_point;
+        d.n1_100pct_rpm = 3_894.0;
+        d.n2_100pct_rpm = 19_391.0;
+        d.mass_flow_kg_s = 460.0;
+        d.bypass_ratio = 8.6;
+        d.fan_pressure_ratio = 1.52;
+        d.booster_pressure_ratio = 2.90;
+        d.hpc_pressure_ratio = 14.0; // OPR = 2.90 * 14.0 = 40.6
+        d.eta_fan = 0.92;
+        d.eta_booster = 0.88;
+        d.eta_hpc = 0.87;
+        d.eta_hpt = 0.89;
+        d.eta_lpt = 0.91;
+        d.cooling_bleed_fraction = 0.16; // two cooled HPT stages, higher T4
+        d.power_extraction_w = 180_000.0;
+        s.spools.n1_idle_pct = 19.0;
+        s.spools.n2_idle_pct = 58.0;
+        // 100 % N2 is defined low on the LEAP-1B (redline 117.5 %): the core
+        // runs above 100 % at takeoff.
+        s.spools.n2_vs_n1 = vec![
+            [0.0, 0.0],
+            [19.0, 58.0],
+            [35.0, 70.0],
+            [50.0, 80.0],
+            [70.0, 92.0],
+            [85.0, 101.0],
+            [100.0, 110.0],
+            [104.0, 112.5],
+            [110.0, 116.0],
+        ];
+        s.spools.lp_inertia_kg_m2 = 70.0; // larger, slower fan
+        s.spools.hp_inertia_kg_m2 = 2.6;  // smaller, faster core
+        s.spools.n1_spooldown_tau_s = 55.0;
+        s.spools.n2_spooldown_tau_s = 16.0;
+        s.fadec.idle_n1_ground_pct = 19.0;
+        s.fadec.idle_n1_flight_pct = 25.0;
+        // Wf/Ps3 schedules sit lower than the CFM56's: at OPR 40 the same fuel
+        // flow is a smaller fraction of the burner pressure.
+        s.fadec.accel_wf_p3_vs_n2c = vec![[50.0, 1.25], [60.0, 1.35], [70.0, 1.50], [80.0, 1.60], [90.0, 1.65], [100.0, 1.65], [120.0, 1.65]];
+        s.fadec.decel_wf_p3_vs_n2c = vec![[50.0, 0.70], [60.0, 0.74], [80.0, 0.78], [100.0, 0.80], [120.0, 0.80]];
+        s.bleed.vbv_open_vs_n2c = vec![[0.0, 1.0], [60.0, 1.0], [75.0, 0.5], [90.0, 0.0], [120.0, 0.0]];
+        s.bleed.vsv_angle_vs_n2c = vec![[0.0, 40.0], [58.0, 40.0], [75.0, 28.0], [92.0, 10.0], [104.0, 0.0], [120.0, 0.0]];
+        s.start.starter_max_n2_pct = 30.0;
+        s.start.min_light_n2_pct = 22.0;
+        s.start.starter_cutout_n2_pct = 60.0;
+        s.start.start_fuel_schedule = vec![[22.0, 0.022], [30.0, 0.032], [45.0, 0.068], [55.0, 0.115], [58.0, 0.150], [60.0, 0.158]];
+        s.start.start_accel_vs_n2 = vec![[22.0, 1.2], [26.0, 2.2], [30.0, 2.4], [40.0, 2.7], [50.0, 4.2], [58.0, 5.6], [60.0, 5.4], [62.0, 5.0]];
+        s.oil.capacity_qt = 21.0;
+        s.oil.full_qt = 19.0;
+        s.limits = Limits {
+            n1_max_pct: 104.0,
+            n2_max_pct: 117.5,
+            egt_takeoff_c: 1_038.0,
+            egt_max_continuous_c: 1_013.0,
+            egt_start_c: 750.0,
+            oil_pressure_min_psi: 17.0,
+            oil_pressure_caution_psi: 25.0,
+            oil_temp_max_continuous_c: 140.0,
+            oil_temp_max_transient_c: 155.0,
+            vib_advisory: 4.0,
+            takeoff_time_limit_s: 300.0,
+        };
+        s
+    }
+
     pub fn overall_pressure_ratio(&self) -> f64 {
         self.design_point.booster_pressure_ratio * self.design_point.hpc_pressure_ratio
     }

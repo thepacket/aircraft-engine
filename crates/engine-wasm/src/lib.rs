@@ -23,7 +23,8 @@ impl Simulator {
         Ok(Simulator { engine: AnyEngine::new(spec) })
     }
 
-    /// Default spec JSON for an engine kind: "turbofan", "piston", "turboprop".
+    /// Default spec JSON for an engine kind or preset: "turbofan" (CFM56-7B26),
+    /// "leap1b" (LEAP-1B28), "piston", "turboprop".
     pub fn default_spec_json_for(kind: &str) -> Result<String, JsValue> {
         AnySpec::default_for(kind).map(|s| s.to_json()).ok_or_else(|| js(format!("unknown engine kind {kind}")))
     }
@@ -86,6 +87,11 @@ impl Simulator {
 
     pub fn set_running(&mut self, level: f64) {
         self.engine.set_running(level);
+    }
+
+    /// Steady-state point for parametric sweeps (see `AnyEngine::steady_state_json`).
+    pub fn steady_state_json(&self, level: f64, altitude_m: f64, mach: f64, delta_isa_k: f64, humidity: f64, settle_s: f64) -> String {
+        self.engine.steady_state_json(level, altitude_m, mach, delta_isa_k, humidity, settle_s)
     }
 
     pub fn step(&mut self, dt: f64) {
