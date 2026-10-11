@@ -1,6 +1,6 @@
 import { SimClient } from "./sim";
 import type { AnyState, AnySpec, EngineTarget } from "./types";
-import { Dial } from "./instruments";
+import { Dial, DIAL_ASPECT, bestColumns } from "./instruments";
 import { initSplitters } from "./splitter";
 import { StripChart } from "./charts";
 import { parseScenario, parseOnOff, ScenarioRunner } from "./scenario";
@@ -73,19 +73,27 @@ async function main(): Promise<void> {
   const buildEicas = (): void => {
     eicas.innerHTML = "";
     eicas.classList.toggle("twin", engines > 1);
-    if (engines > 1) { const lab = document.createElement("div"); lab.className = "eng-labels"; lab.innerHTML = "<span>ENG 1</span><span>ENG 2</span>"; eicas.appendChild(lab); }
-    const primary = document.createElement("div"); primary.className = "param-row primary";
-    const secondary = document.createElement("div"); secondary.className = "param-row secondary";
     dialSets = Array.from({ length: engines }, () => []);
-    const mk = (row: HTMLElement, defs: typeof kind.primary): void => {
-      for (const d of defs) for (let e = 0; e < engines; e++) {
-        const holder = document.createElement("div"); holder.className = "dial"; row.appendChild(holder);
+    // One grid of units: a dial, or in twin mode a pair of dials (ENG 1 | ENG 2)
+    for (const d of [...kind.primary, ...kind.secondary]) {
+      const unit = engines > 1 ? document.createElement("div") : eicas;
+      if (engines > 1) { unit.className = "pair"; eicas.appendChild(unit); }
+      for (let e = 0; e < engines; e++) {
+        const holder = document.createElement("div"); holder.className = "dial"; unit.appendChild(holder);
         dialSets[e].push(new Dial(holder, { label: d.label, unit: d.unit, min: d.min, max: d.max, redline: d.redline, redlineLow: d.redlineLow, amber: d.amber, green: d.green, decimals: d.decimals, digitalOnly: d.digitalOnly, bug: d.bug }));
       }
-    };
-    mk(primary, kind.primary); mk(secondary, kind.secondary);
-    eicas.appendChild(primary); eicas.appendChild(secondary);
+    }
+    layoutEicas();
   };
+  // Pick the column count that gives the largest dials for the panel's current
+  // size (only when the user has set the panel height; otherwise 4 columns).
+  const layoutEicas = (): void => {
+    if (!$("app").classList.contains("eicas-sized")) { eicas.style.removeProperty("--eicas-cols"); return; }
+    const n = kind.primary.length + kind.secondary.length;
+    const cols = bestColumns(n, engines > 1 ? 2 * DIAL_ASPECT : DIAL_ASPECT, eicas.clientWidth, eicas.clientHeight, 6);
+    eicas.style.setProperty("--eicas-cols", String(cols));
+  };
+  new ResizeObserver(layoutEicas).observe(eicas);
   buildEicas();
 
   // ---- Charts -------------------------------------------------------------

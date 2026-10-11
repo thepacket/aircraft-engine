@@ -26,6 +26,25 @@ export interface DialOptions {
   redlineLow?: number;
 }
 
+/** Width / height of one dial drawing (its SVG viewBox) */
+export const DIAL_ASPECT = 200 / 176;
+
+/**
+ * Column count that maximises the size of `n` units of aspect ratio `aspect`
+ * (width / height) laid out in a `w`×`h` grid with `gap` between cells.
+ */
+export function bestColumns(n: number, aspect: number, w: number, h: number, gap: number): number {
+  let best = 1, bestSize = -1;
+  for (let c = 1; c <= n; c++) {
+    const r = Math.ceil(n / c);
+    const cellW = (w - gap * (c - 1)) / c;
+    const cellH = (h - gap * (r - 1)) / r;
+    const size = Math.min(cellW, cellH * aspect); // unit width that fits the cell
+    if (size > bestSize + 0.5) { best = c; bestSize = size; }
+  }
+  return best;
+}
+
 const START_DEG = -210; // scale start angle (degrees, 0 = 3 o'clock, clockwise)
 const SWEEP_DEG = 240;
 

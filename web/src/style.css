@@ -205,18 +205,14 @@ table.stats th:first-child, table.stats td:first-child { text-align: left; }
 .du .hint { color: #5c6670; }
 .eicas.du { box-shadow: inset 0 0 0 3px #1d2024, inset 0 0 0 4px #000, inset 0 0 50px #050a0e, 0 3px 8px #000a; }
 .eicas { height: var(--eicas-h, auto); }
-#eicas { display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 4px; flex: 1; min-height: 0; }
-#eicas.twin { grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); }
-.param-row .dial { min-height: 0; min-width: 0; }
-.param-row .dial svg { width: 100%; height: 100%; max-width: 200px; }
-.eicas-sized .param-row .dial svg, .eicas-sized .twin .dial svg { max-width: none; }
-.param-row { display: grid; gap: 6px; }
-.param-row.primary { grid-template-columns: repeat(4, 1fr); }
-.param-row.secondary { grid-template-columns: repeat(4, 1fr); }
-.twin .param-row { grid-template-columns: repeat(8, 1fr); }
+#eicas { display: grid; grid-template-columns: repeat(var(--eicas-cols, 4), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 6px; flex: 1; min-height: 0; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px; min-height: 0; min-width: 0; position: relative; }
+.pair::before, .pair::after { position: absolute; top: 2px; font-size: 9px; font-weight: 700; letter-spacing: 1px; color: var(--accent); opacity: 0.8; }
+.pair::before { content: "ENG 1"; left: 4px; } .pair::after { content: "ENG 2"; right: 4px; }
+.dial { display: flex; justify-content: center; align-items: center; min-height: 0; min-width: 0; }
+.dial svg { width: 100%; height: 100%; max-width: 200px; }
 .twin .dial svg { max-width: 140px; }
-.eng-labels { display: grid; grid-template-columns: repeat(2, 1fr); text-align: center; color: var(--accent); font-size: 11px; letter-spacing: 2px; font-weight: 700; }
-.dials { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.eicas-sized .dial svg, .eicas-sized .twin .dial svg { max-width: none; }
 .dial { display: flex; justify-content: center; }
 .dial svg { width: 100%; max-width: 200px; height: auto; }
 .warnings { min-height: 18px; display: flex; flex-wrap: wrap; gap: 6px; }
@@ -251,7 +247,7 @@ table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); 
   .eicas { height: auto; }
   #topbar { flex-wrap: wrap; padding: 8px 14px; row-gap: 8px; }
   .topbar-right { flex-wrap: wrap; }
-  .dials { grid-template-columns: repeat(2, 1fr); }
+  #eicas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---- scrollbars ---- */
