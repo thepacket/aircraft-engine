@@ -578,7 +578,7 @@ impl EngineSpec {
         s.fadec.idle_n1_flight_pct = 26.0;
         // Lower OPR: the same fuel flow is a larger fraction of burner pressure
         s.fadec.accel_wf_p3_vs_n2c = vec![[50.0, 2.25], [60.0, 2.40], [70.0, 2.70], [80.0, 2.95], [90.0, 3.10], [100.0, 3.10], [105.0, 3.10]];
-        s.fadec.egt_transient_margin_c = 35.0; // EEC trims the accel fuel as EGT nears the limit
+        s.fadec.egt_transient_margin_c = 60.0; // EEC trims the accel fuel as EGT nears the limit (holds the 635 C limit in a slam from 15 % thrust)
         s.fadec.decel_wf_p3_vs_n2c = vec![[50.0, 0.98], [60.0, 1.03], [80.0, 1.12], [100.0, 1.18], [105.0, 1.18]]; // idle steady ~1.21
         s.start.min_light_n2_pct = 22.0;
         s.start.starter_cutout_n2_pct = 50.0;

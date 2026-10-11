@@ -168,9 +168,9 @@ fn ground_start_sequence_reaches_idle_within_limits() {
 }
 
 #[test]
-fn idle_to_takeoff_acceleration_meets_far_33_73() {
-    // FAR 33.73: from flight idle to 95% rated takeoff thrust in not more than 5 s.
-    // From ground idle (lower) a CFM56-7B takes ~5-7 s; allow 8.
+fn ground_idle_to_takeoff_acceleration_time() {
+    // From ground idle, which is below the FAR 33.73 starting condition (15 % rated
+    // thrust; see tests/far33_73.rs), a CFM56-7B takes ~5-7 s; allow 8.
     let mut e = Engine::new(spec());
     e.set_running(0.0);
     run_for(&mut e, 10.0);

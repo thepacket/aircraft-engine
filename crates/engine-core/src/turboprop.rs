@@ -1057,7 +1057,7 @@ impl TurbopropEngine {
                 if self.lit { ng_dot += interp(&sp.start_accel_vs_ng, self.ng / st) * (0.4 + 0.6 * f.start_fuel_factor).max(0.2) }
                 self.ng += ng_dot * h;
                 if self.lit && self.ng < sp.min_light_ng_pct - 3.0 { self.lit = false; self.fuel_on_since = Some(self.time_s) }
-                if self.lit && !self.starter_engaged && self.ng < self.ng_idle - 3.0 {
+                if self.lit && self.ng < self.ng_idle - 3.0 {
                     if ng_dot < 0.15 { self.hung_timer += h } else { self.hung_timer = 0.0 }
                     if self.hung_timer > 6.0 { self.warnings.push(format!("HUNG START: Ng stalled at {:.0}%", self.ng)) }
                 }
@@ -1119,7 +1119,7 @@ impl TurbopropEngine {
                 let sm_avail = ctl.surge_margin_pct * (0.55 + 0.45 * ngc.min(1.0)) - f.compressor_damage_pct - if f.fod { 4.0 } else { 0.0 };
                 self.sm = ((1.0 + sm_avail / 100.0) / ratio.powf(0.3) - 1.0) * 100.0;
                 if self.surge_timer <= 0.0 && (self.sm < 0.0 || f.trigger_surge) { self.surge_timer = 1.5; self.surge_recovery_s = 4.0; self.surge_count += 1 }
-                if f.trigger_flameout || self.wf < 0.5 * ctl.min_fuel_kg_s { self.lit = false; self.flameout_count += 1 }
+                if f.trigger_flameout || self.wf < 0.5 * ctl.min_fuel_kg_s * inl.delta { self.lit = false; self.flameout_count += 1 }
             }
         }
         if self.surge_timer > 0.0 { self.surge_timer -= h; self.warnings.push("COMPRESSOR SURGE / STALL".into()) }
@@ -1129,7 +1129,9 @@ impl TurbopropEngine {
         // ---- Cycle at the actual point --------------------------------------
         let mut r = if combustion {
             if self.mode == TpMode::Starting {
-                let probe = tp_cycle(&spec, &inl, ngc, inl.tt2_k, false, np_factor, bleed);
+                // Compressor conditions of the *powered* cycle (T4 = T3 gives the
+                // compression without a burner), so the start fuel and the cycle agree
+                let probe = tp_cycle(&spec, &inl, ngc, 0.0, true, np_factor, bleed);
                 let w_b = probe.w2 * (1.0 - spec.design_point.cooling_bleed_fraction - bleed);
                 self.t4 = t4_for_fuel(&spec, w_b, probe.tt3, wf_dyn);
                 self.t4_ss = self.t4;
@@ -1161,12 +1163,14 @@ impl TurbopropEngine {
             let omega_min = rt.engagement_speed_frac * omega100;
             let q_pt = if r.shaft_power_w > 0.0 { r.shaft_power_w / omega_p.max(omega_min) } else { 0.0 };
             let q_fric = 0.01 * spec.limits.torque_max_nm + 2.0 * self.np;
-            // Autorotation: in flight with the collective low, the airflow through
-            // the descending rotor drives it toward ~100 % Nr (lower collective,
-            // higher Nr) whatever the engine does; the freewheel lets the rotor
-            // outrun the power turbine. Modelled as a driving torque toward a
-            // collective-dependent speed, so a flameout with the collective
-            // lowered keeps the rotor turning. Not applied on the ground.
+            // Autorotation, PRESCRIBED, not modelled: there is no descent rate,
+            // rotor attitude or inflow in this simulator, so the energy the
+            // upward airflow would feed the rotor in a real autorotative
+            // descent is replaced by a restoring torque toward a collective-
+            // dependent Nr whenever there is forward airspeed and the collective
+            // is low. It demonstrates the procedure (collective down keeps Nr,
+            // the freewheel lets the rotor outrun the power turbine); it cannot
+            // represent vertical autorotation or the Nr/descent-rate coupling.
             let auto_q = if inl.true_airspeed_m_s > 15.0 && coll < 0.35 && self.np > 0.3 * spec.rating.np_100pct_rpm {
                 let target = spec.rating.np_100pct_rpm * (1.02 - 0.5 * coll);
                 (0.03 * spec.limits.torque_max_nm * (target - self.np) / spec.rating.np_100pct_rpm * 100.0).max(0.0)

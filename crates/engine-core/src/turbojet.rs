@@ -900,7 +900,7 @@ impl TurbojetEngine {
                 if self.lit { n_dot += interp(&sp.start_accel_vs_n, self.n / st) * (0.4 + 0.6 * f.start_fuel_factor).max(0.2) }
                 self.n += n_dot * h;
                 if self.lit && self.n < sp.min_light_n_pct - 3.0 { self.lit = false; self.fuel_on_since = Some(self.time_s) }
-                if self.lit && !self.starter_engaged && self.n < self.n_idle - 3.0 {
+                if self.lit && self.n < self.n_idle - 3.0 {
                     if n_dot < 0.15 { self.hung_timer += h } else { self.hung_timer = 0.0 }
                     if self.hung_timer > 6.0 { self.warnings.push(format!("HUNG START: N stalled at {:.0}%", self.n)) }
                 }
@@ -973,7 +973,9 @@ impl TurbojetEngine {
         // ---- Cycle at the actual point --------------------------------------
         let mut r = if combustion {
             if self.mode == TjMode::Starting {
-                let probe = tj_cycle(&spec, &inl, nc, inl.tt2_k, false, 0.0, a8, bleed);
+                // Compressor conditions of the *powered* cycle (T4 = T3 gives the
+                // compression without a burner), so the start fuel and the cycle agree
+                let probe = tj_cycle(&spec, &inl, nc, 0.0, true, 0.0, a8, bleed);
                 let w_b = probe.w2 * (1.0 - spec.design_point.cooling_bleed_fraction - bleed);
                 self.t4 = t_for_fuel(w_b, CP_AIR, probe.tt3, wf_dyn, spec.design_point.eta_burner, spec.design_point.fuel_lhv_j_kg);
                 self.t4_ss = self.t4;

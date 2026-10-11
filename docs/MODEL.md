@@ -312,7 +312,8 @@ flow, bypass ratio, OPR, fan diameter), FAR 33.73 (acceleration time).
 | Ground idle N1 / N2 | 21 / 60 % | 21 / 60 % | by schedule |
 | Ground idle fuel / EGT | 1 357 lb/h / 454 °C | ~1 000–1 400 / 400–480 | |
 | Cruise FL350 M0.78 N1 85 % | 4 150 lbf / TSFC 0.62 | 4 000–5 500 / 0.60–0.65 | |
-| Idle → 95 % thrust | 6.1 s | ≤ 5 s from flight idle (FAR 33.73) | from the lower ground idle |
+| 15 % → 95 % thrust (FAR 33.73 start) | 4.4 s | ≤ 5 s | LEAP 4.6 s, PW1100G 3.7 s; V2500 5.5 s (EEC EGT limiting, open item) |
+| Ground idle → 95 % thrust | 6.1 s | — | from the lower ground idle |
 | Takeoff → idle | ~10 s | 5–10 s | decel schedule |
 | Ground start, fuel-on → idle | 27 s, EGT peak ~500 °C | 30–60 s, limit 725 °C | |
 | Flat rating | EGT held above ISA+15 | TCDS: flat rated to 30 °C SL | |
@@ -508,6 +509,7 @@ Every number in this document is pinned by a test in `crates/engine-core/tests`:
 
 | File | Tests | What they check |
 |---|---|---|
+| `far33_73.rs` | 2 | 15 % → 95 % thrust slam for the four turbofans, step-size insensitivity |
 | `validation.rs` | 29 | turbofan: design point, takeoff, idle, cruise, monotonicity, bleed, start, FAR 33.73 accel, decel, flat rating, reverser, shutdown, cruise stability, hot/wet/hung starts, weak starter, surge recovery and cycling, flameout and relight, windmill envelope, altitude relight limit, oil starvation, fire bottle, governor failure, EGT probe, logger, spec round trip |
 | `piston.rs` | 11 | full-throttle static, rated power, 8 000 ft cruise and leaning, peak EGT and idle cutoff, idle, cold start, magneto check with fouled plug and dead mag, carburettor ice, fuel starvation and restart, climb and cruise temperatures, logger |
 | `turboprop.rs` | 12 | sized design point, takeoff, low and high idle, cruise, torque vs ITT limits hot and high, prop governing and feather, reverse, ground start, weak-battery hot start, flameout and relight, governor failure overspeed, logger |

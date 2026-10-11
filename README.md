@@ -75,7 +75,8 @@ https://aircraftengine.fly.dev, no install needed.
   afterburner at altitude.
 - Turboshaft lessons (JetRanger): start and rotor engagement, hover power
   with the N2 governor holding rotor speed, hot start on a weak battery,
-  governor failure, flameout and autorotation.
+  governor failure, flameout and autorotation (the autorotation is a prescribed
+  Nr-holding torque, not a rotor inflow model: it shows the procedure, not the physics).
 - The complete model documentation (equations, calibration, limits) is in
   [docs/MODEL.md](docs/MODEL.md) and in the IDE's Model tab.
 
@@ -336,7 +337,8 @@ model lands on the published operating points:
 | Ground idle N1 / N2 | 21 % / 60 % | 21 % / 60 % |
 | Ground idle fuel flow, EGT | ~1,350 lb/h, ~450 °C | ~1,000–1,400 lb/h, 400–480 °C |
 | Cruise FL350 M0.78, N1 85 % | ~4,200 lbf, TSFC 0.62 | 4,000–5,500 lbf, 0.60–0.65 |
-| Idle to 95 % takeoff thrust | ~6 s from ground idle | ≤ 5 s from flight idle (FAR 33.73) |
+| 15 % to 95 % takeoff thrust (FAR 33.73 start condition) | 4.4 s (CFM56), 4.6 s (LEAP), 3.7 s (PW1100G), 5.5 s (V2500, open item) | ≤ 5 s |
+| Ground idle to 95 % takeoff thrust | ~6 s | lower start point than the rule's |
 | Ground start, fuel-on to idle | ~32 s, EGT peak ~600 °C | 30–60 s, limit 725 °C |
 
 **Presets within a family** share the family's model and calibration and

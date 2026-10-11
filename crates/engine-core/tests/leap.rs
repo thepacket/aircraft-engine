@@ -93,7 +93,7 @@ fn ground_start_reaches_idle_within_the_start_limit() {
 }
 
 #[test]
-fn idle_to_takeoff_acceleration_meets_far_33_73() {
+fn ground_idle_to_takeoff_acceleration_time() {
     let mut e = Engine::new(spec());
     e.set_running(0.0);
     run_for(&mut e, 10.0);

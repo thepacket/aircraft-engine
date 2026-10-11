@@ -593,12 +593,17 @@ impl PistonEngine {
             restriction *= 1.0 - ind.carb_heat_restriction;
         }
         if f.carb_ice_enabled {
-            let icing_conditions = oat_c > ind.carb_ice_oat_min_c && oat_c < ind.carb_ice_oat_max_c && self.environment.humidity >= ind.carb_ice_min_humidity && !c.carb_heat && self.mode == PistonMode::Running;
+            // Fuel vaporisation and the venturi cool the induction air by 20-30 K,
+            // most at low power (FAA AC 20-113: serious icing to ~21 C at cruise
+            // power, ~38 C at glide power). The spec's upper limit is the
+            // full-throttle value; closing the throttle extends it.
+            let oat_max = ind.carb_ice_oat_max_c + 17.0 * (1.0 - c.throttle);
+            let icing_conditions = oat_c > ind.carb_ice_oat_min_c && oat_c < oat_max && self.environment.humidity >= ind.carb_ice_min_humidity && !c.carb_heat && self.mode == PistonMode::Running;
             if icing_conditions {
                 // Partial throttle (venturi + throttle plate cooling) ices fastest
                 let factor = 1.0 - 0.6 * c.throttle;
                 self.carb_ice = (self.carb_ice + ind.carb_ice_build_rate * factor * h).min(0.85);
-            } else if c.carb_heat || oat_c > ind.carb_ice_oat_max_c + 5.0 {
+            } else if c.carb_heat || oat_c > oat_max + 5.0 {
                 self.carb_ice = (self.carb_ice - ind.carb_ice_melt_rate * h).max(0.0);
             }
         } else {
@@ -696,11 +701,16 @@ impl PistonEngine {
         // ---- Power ----------------------------------------------------------------
         let fa_burn = fa.min(cb.fa_stoichiometric);
         let lean_factor = if fa >= cb.fa_lean_limit { ((fa - cb.fa_lean_limit) / (0.062 - cb.fa_lean_limit)).clamp(0.0, 1.0) } else { 0.0 };
+        // Slightly rich of stoichiometric burns fastest (best power, ~F/A 0.079);
+        // richer than that the excess fuel cools the charge and power falls off
+        // (about -2 % at full rich at sea level, -5 % at the F/A a sea-level
+        // carburettor delivers at altitude), which is why leaning raises rpm.
         let rich_bonus = 1.0 + 0.5 * (fa - cb.fa_stoichiometric).clamp(0.0, 0.012);
+        let rich_loss = 1.0 - 60.0 * (fa - cb.fa_stoichiometric - 0.012).max(0.0).powi(2);
         // Indicated efficiency falls at part load (slower burn with residual gas)
         let eta_i = cb.indicated_efficiency * (0.55 + 0.45 * map_ratio);
         let ind_power = if self.firing {
-            self.air_flow * fa_burn * cb.fuel_lhv_j_kg * eta_i * lean_factor * rich_bonus * (cyl / spec.geometry.cylinders as f64) * (1.0 - single_mag_loss)
+            self.air_flow * fa_burn * cb.fuel_lhv_j_kg * eta_i * lean_factor * rich_bonus * rich_loss * (cyl / spec.geometry.cylinders as f64) * (1.0 - single_mag_loss)
         } else {
             0.0
         };
@@ -796,11 +806,11 @@ impl PistonEngine {
             let mix = if d > 0.0 { -th.cht_rich_cooling_f_per_fa * d } else { -th.cht_lean_cooling_f_per_fa * (-d) };
             oat_f + th.cht_base_f + th.cht_load_slope_f * load - th.cht_cooling_f_per_kt * tas_kt + mix
         } else {
-            oat_f + 20.0
+            oat_f // residual heat decays to ambient; nothing warms a stopped engine
         };
         let cht_tau = if self.firing { th.cht_tau_s } else { th.cht_tau_s * 3.0 };
         self.cht_f += (cht_target - self.cht_f) / cht_tau * h;
-        let oil_target = if self.firing { oat_f + th.oil_temp_base_f + th.oil_temp_load_slope_f * load - th.oil_temp_cooling_f_per_kt * tas_kt } else { oat_f + 10.0 };
+        let oil_target = if self.firing { oat_f + th.oil_temp_base_f + th.oil_temp_load_slope_f * load - th.oil_temp_cooling_f_per_kt * tas_kt } else { oat_f };
         if self.faults.induction_fire { self.cht_f += 2.0 * h }
         self.oil_temp_f += (oil_target - self.oil_temp_f) / (if self.firing { th.oil_temp_tau_s } else { th.oil_temp_tau_s * 2.0 }) * h;
 

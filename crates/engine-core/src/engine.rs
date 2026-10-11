@@ -356,7 +356,7 @@ impl Engine {
             limit_cache_key: (i64::MIN, 0, 0, 0),
             last_cycle: cold,
             warnings: Vec::new(),
-            max_substep_s: 0.02,
+            max_substep_s: 0.01,
         }
     }
 
@@ -706,8 +706,8 @@ impl Engine {
                     self.lit = false;
                     self.fuel_on_since = Some(self.time_s);
                 }
-                // Hung start: lit, starter dropped out, not accelerating, below idle
-                if self.lit && !self.starter_engaged && self.n2 < s.n2_idle_pct * st - 3.0 {
+                // Hung start: lit, not accelerating, below idle (with or without the starter)
+                if self.lit && self.n2 < s.n2_idle_pct * st - 3.0 {
                     if n2_dot < 0.15 { self.hung_timer += h } else { self.hung_timer = 0.0 }
                     if self.hung_timer > 6.0 {
                         self.warnings.push(format!("HUNG START: N2 stalled at {:.0}%", self.n2));
@@ -792,7 +792,7 @@ impl Engine {
                     self.surge_count += 1;
                 }
                 // --- Flameout ---
-                if f.trigger_flameout || self.wf < 0.5 * fd.min_fuel_kg_s {
+                if f.trigger_flameout || self.wf < 0.5 * fd.min_fuel_kg_s * inl.delta {
                     self.lit = false;
                     self.flameout_count += 1;
                 }
