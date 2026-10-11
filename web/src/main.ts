@@ -7,7 +7,7 @@ import { StripChart } from "./charts";
 import { parseScenario, parseOnOff, ScenarioRunner } from "./scenario";
 import { signal, setActiveSignals, hasSignal } from "./signals";
 import { KINDS, kindDef, lessonsFor, type KindDef, type ControlDef } from "./kinds";
-import { setUnitSystem, unitSystem, fmtFuelFlow, fmtPressure, fmtTemp, FT, type UnitSystem } from "./units";
+import { setUnitSystem, unitSystem, speedOfSound, fmtFuelFlow, fmtPressure, fmtTemp, FT, type UnitSystem } from "./units";
 import { parseCsv, autoMap, Replay, Comparison, INPUT_CHANNELS, INPUT_UNITS, measuredSignals, type Mapping, type LogTable } from "./replay";
 import { encodeShare, decodeShare } from "./share";
 import { renderMarkdown } from "./markdown";
@@ -147,8 +147,10 @@ async function main(): Promise<void> {
   const alt = $<HTMLInputElement>("alt"), mach = $<HTMLInputElement>("mach"), disa = $<HTMLInputElement>("disa"), humidity = $<HTMLInputElement>("humidity");
   let env = { alt: 0, mach: 0, disa: 0, humidity: 0.4 };
   const speedIsTas = (): boolean => kind.kind === "piston";
-  const machToDisplay = (m: number): number => (speedIsTas() ? m * 340.3 * (unitSystem() === "si" ? 1 : 1.94384) : m);
-  const displayToMach = (v: number): number => (speedIsTas() ? v / (unitSystem() === "si" ? 1 : 1.94384) / 340.3 : v);
+  // The core converts Mach to TAS with the local speed of sound, so the UI must too
+  const a0 = (): number => speedOfSound(env.alt, env.disa);
+  const machToDisplay = (m: number): number => (speedIsTas() ? m * a0() * (unitSystem() === "si" ? 1 : 1.94384) : m);
+  const displayToMach = (v: number): number => (speedIsTas() ? v / (unitSystem() === "si" ? 1 : 1.94384) / a0() : v);
   const pushEnv = (): void => client.setEnvironment(env.alt, env.mach, env.disa, env.humidity);
   const refreshEnvInputs = (): void => {
     alt.value = unitSystem() === "si" ? String(Math.round(env.alt)) : String(Math.round(env.alt / FT));
@@ -159,7 +161,11 @@ async function main(): Promise<void> {
     document.querySelectorAll(".alt-unit").forEach((e) => (e.textContent = unitSystem() === "si" ? "m" : "ft"));
   };
   const setEnv = (a?: number, m?: number, d?: number, h?: number): void => {
+    // For a piston engine the displayed quantity is TAS: keep it fixed when the
+    // altitude or temperature changes the speed of sound
+    const tas = speedIsTas() && m === undefined ? env.mach * a0() : undefined;
     if (a !== undefined) env.alt = a; if (m !== undefined) env.mach = m; if (d !== undefined) env.disa = d; if (h !== undefined) env.humidity = h;
+    if (tas !== undefined) env.mach = tas / a0();
     refreshEnvInputs(); pushEnv();
   };
   alt.addEventListener("change", () => setEnv((parseFloat(alt.value) || 0) * (unitSystem() === "si" ? 1 : FT)));
@@ -247,6 +253,8 @@ async function main(): Promise<void> {
   $<HTMLSelectElement>("engine-count").addEventListener("change", (e) => {
     engines = parseInt((e.target as HTMLSelectElement).value, 10) === 2 ? 2 : 1;
     lsSet(LS.engines, String(engines)); client.setEngines(engines); charts.forEach((c) => c.setEngines(engines)); buildEicas(); refreshTargetRow();
+    // The worker builds fresh simulators: give them the environment the panel shows
+    pushEnv(); setN1Hold(false, NaN, "all"); refreshFaultPanel();
   });
   const applyKind = (k: string, specJson?: string): Promise<void> => (specJson ? client.setSpec(specJson) : client.setKind(k)).then(async (r) => {
     spec = r.spec; kind = kindDef(client.kind, spec); setActiveSignals(kind.signals);
@@ -589,7 +597,14 @@ async function main(): Promise<void> {
     const s = replay.sample(Math.max(t, 0));
     if (s.alt !== undefined || s.mach !== undefined || s.isa !== undefined) { env = { ...env, alt: s.alt ?? env.alt, mach: s.mach ?? env.mach, disa: s.isa ?? env.disa }; pushEnv(); }
     client.setControl("starter", s.starter ? 1 : 0, "all");
-    client.setControl(kind.fuelControl.name, s.fuel_lever ?? true ? kind.fuelControl.on : kind.fuelControl.off, "all");
+    // Fuel control: a logged mixture (0..1) or condition lever / twist grip
+    // (0, 1, 2) is replayed as logged; otherwise the inferred on/off
+    const fv = s.fuel_value;
+    const fuelValue = fv === undefined ? (s.fuel_lever ?? true ? kind.fuelControl.on : kind.fuelControl.off)
+      : kind.kind === "piston" ? Math.min(Math.max(fv, 0), 1)
+      : kind.kind === "turboprop" || kind.kind === "turboshaft" ? Math.min(Math.max(Math.round(fv), 0), 2)
+      : fv > 0.5 ? kind.fuelControl.on : kind.fuelControl.off;
+    client.setControl(kind.fuelControl.name, fuelValue, "all");
     if (s.lever !== undefined) { if (kind.kind === "turbofan") client.setControl("n1_demand", -1, "all"); client.setControl(kind.mainLever, s.lever, "all"); }
     else if (s.n1_cmd !== undefined && kind.kind === "turbofan") client.setControl("n1_demand", s.n1_cmd, "all");
     const simT = states[0].time_s;

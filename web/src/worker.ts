@@ -22,8 +22,11 @@ let paused = false;
 let lastReal = 0;
 let lastPost = 0;
 let specJson = "";
+/** Bumped whenever the simulators are rebuilt or respecified; a sweep started under another generation is void */
+let generation = 0;
 
 function makeSims(n: number): void {
+  generation++;
   sims = [];
   for (let i = 0; i < n; i++) sims.push(new Simulator(specJson));
 }
@@ -84,12 +87,14 @@ self.onmessage = async (ev: MessageEvent<Msg>) => {
         const probe = new Simulator(m.json);
         probe.free();
         specJson = m.json;
+        generation++;
         for (const s of sims) s.set_spec_json(m.json);
         postMeta(m.id);
         break;
       }
       case "kind": {
         specJson = Simulator.default_spec_json_for(m.kind);
+        generation++;
         for (const s of sims) s.set_spec_json(specJson);
         postMeta(m.id);
         break;
@@ -100,19 +105,23 @@ self.onmessage = async (ev: MessageEvent<Msg>) => {
         break;
       }
       case "sweep": {
-        // Steady-state points on a copy of engine 1; the running engines are
-        // untouched. Computed in ~25 ms slices so the clock keeps ticking.
+        // Steady-state points on a private simulator built from the spec in
+        // force when the sweep started; the running engines are untouched.
+        // Computed in ~25 ms slices so the clock keeps ticking. If the engine
+        // is changed meanwhile the sweep is void rather than a mix of two engines.
         const states: string[] = [];
+        const gen = generation;
+        const s = new Simulator(specJson);
         let i = 0;
         const slice = (): void => {
-          const s = sims[0];
+          if (generation !== gen) { s.free(); (self as unknown as Worker).postMessage({ type: "error", id: m.id, message: "The engine changed during the sweep; run it again." }); return; }
           const t0 = performance.now();
           while (i < m.points.length && performance.now() - t0 < 25) {
             const p = m.points[i++];
             states.push(s.steady_state_json(p.level, p.n1 ?? -1, p.alt, p.mach, p.disa, p.humidity, m.settle));
           }
           if (i < m.points.length) setTimeout(slice, 0);
-          else (self as unknown as Worker).postMessage({ type: "sweep", id: m.id, states });
+          else { s.free(); (self as unknown as Worker).postMessage({ type: "sweep", id: m.id, states }); }
         };
         slice();
         break;

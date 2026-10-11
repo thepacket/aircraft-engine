@@ -7,18 +7,35 @@ import { activeSignals, type Signal } from "./signals";
 
 export interface LogTable { columns: string[]; rows: Float64Array[]; n: number }
 
+/** Split one CSV line on `sep`, honouring double quotes ("" inside a quoted field is a quote). */
+export function splitCsvLine(line: string, sep: string): string[] {
+  const out: string[] = [];
+  let cur = "", quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else quoted = false; }
+      else cur += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === sep) { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map((c) => c.trim());
+}
+
 export function parseCsv(text: string): LogTable {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) throw new Error("CSV needs a header and at least one row");
   const sep = lines[0].includes(";") && !lines[0].includes(",") ? ";" : lines[0].includes("\t") ? "\t" : ",";
-  const columns = lines[0].split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
+  const columns = splitCsvLine(lines[0], sep);
   const rows: Float64Array[] = columns.map(() => new Float64Array(lines.length - 1));
   let n = 0;
   for (let i = 1; i < lines.length; i++) {
-    const cells = lines[i].split(sep);
+    const cells = splitCsvLine(lines[i], sep);
     if (cells.length < 2) continue;
     for (let c = 0; c < columns.length; c++) {
-      const v = parseFloat(cells[c]);
+      const v = cells[c] === undefined || cells[c] === "" ? NaN : Number(cells[c]);
       rows[c][n] = Number.isFinite(v) ? v : NaN;
     }
     n++;
@@ -27,6 +44,8 @@ export function parseCsv(text: string): LogTable {
 }
 
 export const INPUT_CHANNELS = ["time", "lever", "n1_cmd", "fuel_lever", "starter", "alt", "mach", "isa"] as const;
+/** The lever column of a turboshaft log is the collective; its `power_lever` column is unrelated */
+export const LEVER_PATTERNS_TURBOSHAFT: RegExp[] = [/^collective/i];
 export type InputChannel = (typeof INPUT_CHANNELS)[number];
 
 export interface Mapping {
@@ -57,20 +76,41 @@ export function measuredSignals(): Signal[] {
   return activeSignals().filter((s) => s.patterns && s.patterns.length);
 }
 
+/** Unit named by a column's suffix (`thrust_n`, `torque_ftlb`, `egt_c`, `ff_pph`...), as an import-unit label */
+const SUFFIX_UNITS: [RegExp, string][] = [
+  [/_kn$/i, "kN"], [/_n$/i, "N"], [/_lbf$/i, "lbf"],
+  [/_ftlb$|_ft_?lb$/i, "ft·lb"], [/_nm$|_n_?m$/i, "N·m"], [/_pct$|_percent$|%$/i, "%"],
+  [/_kg_s$|_kgs$/i, "kg/s"], [/_kg_h$|_kgh$/i, "kg/h"], [/_pph$|_lb_h$|_lbh$/i, "lb/h"], [/_gph$|_gal_h$/i, "gal/h"],
+  [/_c$|_degc$/i, "°C"], [/_f$|_degf$/i, "°F"], [/_k$/i, "K"],
+  [/_psi$/i, "psi"], [/_kpa$/i, "kPa"], [/_inhg$/i, "inHg"], [/_hp$/i, "hp"], [/_kw$/i, "kW"], [/_rpm$/i, "rpm"],
+];
+export function suffixUnit(column: string): string | undefined {
+  return SUFFIX_UNITS.find(([re]) => re.test(column))?.[1];
+}
+
 export function autoMap(columns: string[]): Mapping {
   const m: Mapping = { columns: {}, units: {} };
   const lower = (c: string): string => c.toLowerCase();
   for (const ch of INPUT_CHANNELS) {
-    for (const re of INPUT_PATTERNS[ch]) { const hit = columns.find((c) => re.test(c)); if (hit) { m.columns[ch] = hit; break; } }
+    const pats = ch === "lever" && activeSignals().some((s) => s.key === "nr") ? [...LEVER_PATTERNS_TURBOSHAFT, ...INPUT_PATTERNS.lever] : INPUT_PATTERNS[ch];
+    for (const re of pats) { const hit = columns.find((c) => re.test(c)); if (hit) { m.columns[ch] = hit; break; } }
     m.units[ch] = 0;
   }
   const used = new Set(Object.values(m.columns));
   for (const s of measuredSignals()) {
-    for (const re of s.patterns!) { const hit = columns.find((c) => !used.has(c) && re.test(c)); if (hit) { m.columns[s.key] = hit; used.add(hit); break; } }
-    m.units[s.key] = 0;
-    const name = lower(m.columns[s.key] ?? "");
     const opts = s.importUnits ?? [];
-    const pick = (re: RegExp): void => { const i = opts.findIndex((u) => re.test(u.label.toLowerCase())); if (i >= 0) m.units[s.key] = i; };
+    // Candidates in pattern order; a column whose unit suffix is one this
+    // signal can import wins (so `torque_pct` beats `torque_ftlb` for a
+    // percent torque), then the first match without a conflicting suffix.
+    const cands: string[] = [];
+    for (const re of s.patterns!) for (const c of columns) if (!used.has(c) && !cands.includes(c) && re.test(c)) cands.push(c);
+    const unitOf = (c: string): number => { const u = suffixUnit(c); return u === undefined ? -2 : opts.findIndex((o) => o.label === u); };
+    const hit = cands.find((c) => unitOf(c) >= 0) ?? cands.find((c) => unitOf(c) === -2) ?? cands[0];
+    if (hit) { m.columns[s.key] = hit; used.add(hit); }
+    m.units[s.key] = Math.max(0, hit ? unitOf(hit) : 0);
+    const name = lower(m.columns[s.key] ?? "");
+    const explicit = hit !== undefined && unitOf(hit) >= 0;
+    const pick = (re: RegExp): void => { if (explicit) return; const i = opts.findIndex((u) => re.test(u.label.toLowerCase())); if (i >= 0) m.units[s.key] = i; };
     if (/pph|lb.?h|lbs.?hr/.test(name)) pick(/lb\/h/);
     else if (/gph|gal/.test(name)) pick(/gal/);
     else if (/kg.?h/.test(name)) pick(/kg\/h/);
@@ -91,6 +131,8 @@ export interface ReplaySample {
   lever?: number;
   n1_cmd?: number;
   fuel_lever?: boolean;
+  /** The logged fuel-control value itself (mixture 0..1, condition lever 0/1/2, twist grip 0/1/2) */
+  fuel_value?: number;
   starter?: boolean;
   alt?: number;
   mach?: number;
@@ -109,9 +151,12 @@ export class Replay {
     if (!tc) throw new Error("no time column mapped");
     const raw = table.rows[table.columns.indexOf(tc)];
     const u = INPUT_UNITS.time![map.units.time ?? 0];
+    if (!raw.length || !raw.every(Number.isFinite)) throw new Error(`time column "${tc}" has missing or non-numeric values`);
     const t0 = u.toSi(raw[0]);
     this.t = Float64Array.from(raw, (v) => u.toSi(v) - t0);
+    for (let i = 1; i < this.t.length; i++) if (!(this.t[i] >= this.t[i - 1])) throw new Error(`time column "${tc}" is not increasing at row ${i + 1}`);
     this.duration = this.t[this.t.length - 1];
+    if (!(this.duration > 0)) throw new Error("the log spans no time");
     this.cols = new Map(table.columns.map((c, i) => [c, table.rows[i]]));
     this.sigs = measuredSignals();
   }
@@ -153,6 +198,7 @@ export class Replay {
     // core turns above idle; starter while the core is below light-off with no fuel.
     const ff = s.measured.ff, core = s.measured.n2 ?? s.measured.ng ?? s.measured.rpm;
     const coreIdle = s.measured.rpm !== undefined ? 400 : 30;
+    if (fl !== undefined && Number.isFinite(fl)) s.fuel_value = fl;
     s.fuel_lever = fl !== undefined ? fl > 0.5 : ff !== undefined ? ff > 0.0005 : core !== undefined ? core > coreIdle : true;
     s.starter = st !== undefined ? st > 0.5 : core !== undefined ? core > 0.5 && core < coreIdle * 1.6 && !(ff !== undefined && ff > 0.0005 && core > coreIdle * 1.5) : false;
     if (s.lever === undefined && s.n1_cmd === undefined && s.measured.n1 !== undefined) s.n1_cmd = s.measured.n1;

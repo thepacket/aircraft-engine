@@ -10,6 +10,13 @@ export const LBF = 4.448222;
 export const PPH = 7936.64; // kg/s -> lb/h
 export const KT = 1.94384;
 
+/** ISA speed of sound (m/s) at an altitude (m) with a temperature deviation (K), as the core computes it */
+export function speedOfSound(altM: number, disaK = 0): number {
+  const h = Math.min(Math.max(altM, -1000), 20000);
+  const t = (h <= 11000 ? 288.15 - 0.0065 * h : 216.65) + disaK;
+  return Math.sqrt(1.4 * 287.05287 * t);
+}
+
 export function fmtThrust(n: number): string {
   return system === "si" ? `${(n / 1000).toFixed(1)} kN` : `${(n / LBF).toFixed(0)} lbf`;
 }

@@ -745,7 +745,7 @@ pub struct TurbopropEngine {
 }
 
 pub const TP_LOG_COLUMNS: &[&str] = &[
-    "time_s", "mode", "power_lever", "prop_lever", "condition_lever", "starter", "ignition", "bleed_air",
+    "time_s", "mode", "power_lever", "prop_lever", "condition_lever", "collective", "starter", "ignition", "bleed_air",
     "altitude_m", "mach", "delta_isa_k", "tt2_k", "pt2_pa",
     "ng_pct", "ng_corrected_pct", "ng_command_pct", "np_rpm", "np_target_rpm", "torque_ftlb", "torque_pct",
     "itt_c", "itt_gas_c", "t4_k", "t4_steady_k", "shaft_power_hp", "power_pct",
@@ -1375,7 +1375,7 @@ pub fn tp_log_row(s: &TpState) -> Vec<f64> {
     let c = &s.controls;
     let cy = &s.cycle;
     vec![
-        s.time_s, mode, c.power_lever, c.prop_lever, c.condition_lever as f64, c.starter as u8 as f64, c.ignition as u8 as f64, c.bleed_air as u8 as f64,
+        s.time_s, mode, c.power_lever, c.prop_lever, c.condition_lever as f64, c.collective, c.starter as u8 as f64, c.ignition as u8 as f64, c.bleed_air as u8 as f64,
         s.environment.altitude_m, s.environment.mach, s.environment.delta_isa_k, s.inlet.tt2_k, s.inlet.pt2_pa,
         s.ng_pct, s.ng_corrected_pct, s.ng_command_pct, s.np_rpm, s.np_target_rpm, s.torque_ftlb, s.torque_pct,
         s.itt_c, s.itt_gas_c, s.t4_k, s.t4_steady_k, s.shaft_power_hp, s.power_pct,

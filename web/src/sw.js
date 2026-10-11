@@ -1,12 +1,15 @@
 // Service worker: makes the simulator usable offline after the first visit.
-// Same-origin GET requests are served network-first and the response is kept
-// in the cache; when the network fails (offline), the cached copy is used.
-// The built app is fingerprinted by Vite, so a new deployment simply adds new
-// files; old entries are dropped when the cache name changes.
-const CACHE = "aircraft-engine-v1";
+// The build injects the fingerprinted application files (JS, CSS, worker,
+// wasm, scenarios) into PRECACHE and a cache name derived from them, so the
+// whole app is cached at install time, before the page's own requests, rather
+// than relying on each file having been fetched once while online.
+// Same-origin GET requests are served network-first with the cache as the
+// fallback; new deployments change the cache name and old entries are dropped.
+const PRECACHE = self.__PRECACHE__ || ["./", "./manifest.webmanifest"];
+const CACHE = "aircraft-engine-" + (self.__BUILD__ || "dev");
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(["./", "./manifest.webmanifest"]).catch(() => undefined)));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)));
   self.skipWaiting();
 });
 

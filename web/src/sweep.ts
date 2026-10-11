@@ -92,6 +92,7 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
       b.addEventListener("click", () => applyRecipe(r)); recipes.appendChild(b);
     }
   };
+  let lastUnits = unitSystem();
   const rebuild = (): void => {
     fillVars();
     fillRecipes();
@@ -99,7 +100,15 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
     ySel.innerHTML = "";
     for (const s of activeSignals()) { const o = document.createElement("option"); o.value = s.key; o.textContent = s.label; ySel.appendChild(o); }
     ySel.value = activeSignals().some((s) => s.key === keep) ? keep : activeSignals().some((s) => s.key === "thrust") ? "thrust" : activeSignals()[0]?.key ?? "";
-    setRange();
+    if (unitSystem() !== lastUnits) {
+      // A unit switch keeps the same physical conditions: convert the retained
+      // altitude range and series values instead of re-reading them as the new unit
+      const conv = (v: number): number => (lastUnits === "si" ? v / FT : v * FT);
+      const fmt = (v: number): string => String(Math.round(conv(v)));
+      if (xSel.value === "alt") { const a = parseFloat(from.value), b = parseFloat(to.value); if (Number.isFinite(a)) from.value = fmt(a); if (Number.isFinite(b)) to.value = fmt(b); }
+      if (sSel.value === "alt") sVals.value = sVals.value.split(/[,\s]+/).map(parseFloat).filter(Number.isFinite).map(fmt).join(", ");
+      lastUnits = unitSystem();
+    } else setRange();
     result = null; draw();
   };
   const setRange = (): void => { const [a, b] = varOf(xSel.value).def(); from.value = String(a); to.value = String(b); };
