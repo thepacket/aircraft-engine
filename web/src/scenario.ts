@@ -87,16 +87,18 @@ export class ScenarioRunner {
   private lastT = 0;
   active = false;
   current = "";
+  /** Script line (1-based) of the last event applied, 0 before the first */
+  currentLine = 0;
 
   constructor(private events: ScenarioEvent[], private h: ScenarioHandlers, private read: (signal: string) => number) {}
 
-  start(simTime: number): void { this.t0 = simTime; this.active = true; this.current = ""; for (const e of this.events) e.fired = false; }
+  start(simTime: number): void { this.t0 = simTime; this.active = true; this.current = ""; this.currentLine = 0; for (const e of this.events) e.fired = false; }
   stop(): void { this.active = false; }
   get elapsed(): number { return this.lastT - this.t0; }
-  get pendingConditions(): string[] {
-    const rel = this.lastT - this.t0;
-    return this.events.filter((e) => e.cond && !e.fired && e.t <= rel).map((e) => `${e.cond!.signal} ${e.cond!.op} ${e.cond!.value} → ${e.cmd} ${e.arg}`);
-  }
+  private get armed(): ScenarioEvent[] { const rel = this.lastT - this.t0; return this.events.filter((e) => e.cond && !e.fired && e.t <= rel); }
+  get pendingConditions(): string[] { return this.armed.map((e) => `${e.cond!.signal} ${e.cond!.op} ${e.cond!.value} → ${e.cmd} ${e.arg}`); }
+  /** Script lines of the conditional events waiting to fire */
+  get waitingLines(): number[] { return this.armed.map((e) => e.line); }
 
   tick(simTime: number): void {
     if (!this.active) return;
@@ -117,6 +119,7 @@ export class ScenarioRunner {
     const num = parseFloat(e.arg);
     const n = (d = 0): number => (Number.isFinite(num) ? num : d);
     this.current = `${e.cond ? "when " + e.cond.signal + e.cond.op + e.cond.value : "t+" + e.t + "s"}: ${e.cmd} ${e.arg}`;
+    this.currentLine = e.line;
     switch (e.cmd) {
       case "engine": this.h.engine(/^(all|both)$/i.test(e.arg) ? "all" : Math.max(0, n(1) - 1)); break;
       case "ctl": { const [name, ...rest] = e.arg.split(/\s+/); const v = parseOnOff(rest.join(" ") || "1"); if (v !== null) this.h.ctl(name, v); break; }

@@ -261,7 +261,30 @@ async function main(): Promise<void> {
   buildLessons();
   presetSel.addEventListener("change", () => void loadPreset(presetSel.value));
   if (shared?.scenario) scenarioText.value = shared.scenario; else if (lsGet(LS.scenario)) scenarioText.value = lsGet(LS.scenario)!; else await loadPreset(kind.lessons[0][0]);
-  scenarioText.addEventListener("input", () => lsSet(LS.scenario, scenarioText.value));
+  scenarioText.addEventListener("input", () => { lsSet(LS.scenario, scenarioText.value); scenarioHlKey = ""; });
+  // Highlight layer: the current line (last event applied) and the armed conditional lines
+  const scenarioHl = $("scenario-hl");
+  let scenarioHlKey = "";
+  scenarioText.addEventListener("scroll", () => { scenarioHl.scrollTop = scenarioText.scrollTop; scenarioHl.scrollLeft = scenarioText.scrollLeft; });
+  const renderScenarioHighlight = (): void => {
+    const cur = runner?.active ? runner.currentLine : 0;
+    const waiting = runner?.active ? runner.waitingLines : [];
+    const key = `${cur}|${waiting.join(",")}|${scenarioText.value.length}`;
+    if (key === scenarioHlKey) return;
+    scenarioHlKey = key;
+    const prevCur = scenarioHl.querySelector(".ln.current");
+    scenarioHl.innerHTML = scenarioText.value.split(/\r?\n/).map((l, i) => {
+      const n = i + 1, cls = n === cur ? " current" : waiting.includes(n) ? " waiting" : "";
+      return `<div class="ln${cls}">${esc(l) || " "}</div>`;
+    }).join("");
+    scenarioHl.scrollTop = scenarioText.scrollTop;
+    // Keep the current line in view when it changes
+    const el = scenarioHl.querySelector<HTMLElement>(".ln.current");
+    if (el && el.textContent !== prevCur?.textContent) {
+      const top = el.offsetTop - scenarioHl.offsetTop, bottom = top + el.offsetHeight;
+      if (top < scenarioText.scrollTop || bottom > scenarioText.scrollTop + scenarioText.clientHeight) scenarioText.scrollTop = Math.max(0, top - scenarioText.clientHeight / 2);
+    }
+  };
   $("btn-scenario-open").addEventListener("click", async () => { const f = await openFile(".txt"); if (f) { scenarioText.value = f.text; lsSet(LS.scenario, f.text); } });
   $("btn-scenario-save").addEventListener("click", () => download("scenario.txt", scenarioText.value, "text/plain"));
 
@@ -458,6 +481,7 @@ async function main(): Promise<void> {
     warnBox.innerHTML = warns.join("");
     logStatus.textContent = `${st.logger_rows} rows${st.logger_enabled ? " · recording" : ""}${runner?.active ? `  ·  scenario t+${runner.elapsed.toFixed(0)} s` : ""}`;
     btnLog.textContent = st.logger_enabled ? "Stop logging" : "Start logging"; btnLog.classList.toggle("active", st.logger_enabled);
+    renderScenarioHighlight();
     scenarioStatus.textContent = runner?.active ? `Running — ${runner.current}${runner.pendingConditions.length ? "\nwaiting: " + runner.pendingConditions.join("; ") : ""}` : scenarioStatus.classList.contains("err") ? scenarioStatus.textContent : "Idle";
   }
 
