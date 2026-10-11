@@ -510,6 +510,77 @@ impl EngineSpec {
         s
     }
 
+    /// IAE V2527-A5: 26,500 lbf takeoff thrust, Airbus A320-200.
+    ///
+    /// Published figures (FAA TCDS E40NE, Airbus A320 FCOM limitations, IAE
+    /// data): rating, geometry, 100 % speeds, bypass ratio, pressure-ratio
+    /// class, EGT / speed / oil limits. The V2500 reads EGT at the LPT exit,
+    /// hence the low EGT numbers and the probe fraction near 1. Calibration
+    /// knobs start from the CFM56-7B26 and are approximations.
+    pub fn v2527_a5() -> Self {
+        let mut s = Self::cfm56_7b26();
+        s.name = "V2527-A5".into();
+        s.manufacturer = "IAE International Aero Engines".into();
+        s.application = "Airbus A320-200".into();
+        s.rating = Rating {
+            takeoff_thrust_n: 117_900.0,        // 26,500 lbf
+            max_continuous_thrust_n: 108_000.0, // ~24,300 lbf
+            flat_rating_delta_isa_k: 15.0,
+        };
+        s.geometry = Geometry {
+            fan_diameter_m: 1.613, // 63.5 in
+            length_m: 3.200,
+            dry_mass_kg: 2_370.0,
+            fan_stages: 1,
+            booster_stages: 4,
+            hpc_stages: 10,
+            hpt_stages: 2,
+            lpt_stages: 5,
+        };
+        let d = &mut s.design_point;
+        d.n1_100pct_rpm = 5_650.0;
+        d.n2_100pct_rpm = 14_950.0;
+        d.mass_flow_kg_s = 355.0;
+        d.bypass_ratio = 4.8;
+        d.fan_pressure_ratio = 1.70;
+        d.booster_pressure_ratio = 2.55;
+        d.hpc_pressure_ratio = 10.8; // OPR = 2.55 * 10.8 = 27.5
+        d.eta_fan = 0.90;
+        d.eta_hpc = 0.86;
+        d.eta_hpt = 0.89;
+        d.cooling_bleed_fraction = 0.14;
+        d.egt_probe_lpt_fraction = 0.95; // thermocouples at the LPT exit
+        s.spools.n1_idle_pct = 20.0;
+        s.spools.n2_idle_pct = 58.0;
+        s.spools.n2_vs_n1 = vec![[0.0, 0.0], [20.0, 58.0], [35.0, 69.0], [50.0, 77.0], [70.0, 86.0], [85.0, 92.0], [100.0, 97.0], [104.0, 99.0], [110.0, 101.5]];
+        s.fadec.idle_n1_ground_pct = 20.0;
+        s.fadec.idle_n1_flight_pct = 26.0;
+        // Lower OPR: the same fuel flow is a larger fraction of burner pressure
+        s.fadec.accel_wf_p3_vs_n2c = vec![[50.0, 1.80], [60.0, 1.95], [70.0, 2.20], [80.0, 2.45], [90.0, 2.55], [100.0, 2.55], [105.0, 2.55]];
+        s.fadec.decel_wf_p3_vs_n2c = vec![[50.0, 1.15], [60.0, 1.20], [80.0, 1.28], [100.0, 1.31], [105.0, 1.31]];
+        s.start.min_light_n2_pct = 22.0;
+        s.start.starter_cutout_n2_pct = 50.0;
+        s.start.start_fuel_schedule = vec![[20.0, 0.020], [30.0, 0.030], [45.0, 0.065], [55.0, 0.110], [58.0, 0.150], [60.0, 0.155]];
+        s.oil.capacity_qt = 30.0;
+        s.oil.full_qt = 26.0;
+        s.oil.pressure_gain_psi_per_pct = 1.55;
+        s.oil.pressure_offset_psi = -10.0;
+        s.limits = Limits {
+            n1_max_pct: 100.0,
+            n2_max_pct: 100.0,
+            egt_takeoff_c: 635.0,
+            egt_max_continuous_c: 610.0,
+            egt_start_c: 635.0,
+            oil_pressure_min_psi: 60.0,
+            oil_pressure_caution_psi: 65.0,
+            oil_temp_max_continuous_c: 155.0,
+            oil_temp_max_transient_c: 165.0,
+            vib_advisory: 4.0,
+            takeoff_time_limit_s: 300.0,
+        };
+        s
+    }
+
     pub fn overall_pressure_ratio(&self) -> f64 {
         self.design_point.booster_pressure_ratio * self.design_point.hpc_pressure_ratio
     }

@@ -29,6 +29,16 @@ impl Simulator {
         AnySpec::default_for(kind).map(|s| s.to_json()).ok_or_else(|| js(format!("unknown engine kind {kind}")))
     }
 
+    /// Built-in presets as JSON: [{key, kind, name, label}]
+    pub fn presets_json() -> String {
+        AnySpec::presets_json()
+    }
+
+    /// Preset key of the current spec (the engine kind for a custom spec).
+    pub fn preset(&self) -> String {
+        self.engine.spec().preset().to_string()
+    }
+
     pub fn default_spec_json() -> String {
         AnySpec::default_for("turbofan").unwrap().to_json()
     }

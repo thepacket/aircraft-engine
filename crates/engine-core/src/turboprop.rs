@@ -238,6 +238,54 @@ impl TurbopropSpec {
         }
     }
 
+    /// Pratt & Whitney Canada PT6A-42: 850 shp, Beechcraft King Air B200.
+    ///
+    /// Published figures (FAA TCDS E4EA, King Air B200 POH): rating, 100 %
+    /// speeds, torque / ITT / Ng / Np / oil limits, propeller. Calibration
+    /// knobs are those of the PT6A-114A scaled to the larger gas generator.
+    pub fn pt6a_42() -> Self {
+        let mut s = Self::pt6a_114a();
+        s.name = "PT6A-42".into();
+        s.application = "Beechcraft King Air B200".into();
+        s.rating = TpRating { shaft_power_w: 850.0 * HP, flat_rating_delta_isa_k: 22.0, ng_100pct_rpm: 37_500.0, np_100pct_rpm: 2_000.0 };
+        s.design_point.mass_flow_kg_s = 3.9;
+        s.design_point.compressor_pressure_ratio = 10.0;
+        s.design_point.eta_compressor = 0.77;
+        s.design_point.power_extraction_w = 25_000.0;
+        s.control.ng_low_idle_pct = 60.0;
+        s.control.ng_high_idle_pct = 70.0;
+        s.control.np_min_rpm = 1_600.0;
+        s.control.np_max_rpm = 2_000.0;
+        s.control.np_overspeed_rpm = 2_100.0;
+        s.control.ng_inertia_kg_m2 = 0.045;
+        s.start.start_fuel_schedule = vec![[12.0, 0.0055], [20.0, 0.0075], [30.0, 0.0105], [40.0, 0.0135], [50.0, 0.0160], [60.0, 0.0175], [62.0, 0.0178]];
+        s.start.starter_cutout_ng_pct = 52.0;
+        s.oil.capacity_qt = 14.0;
+        s.oil.full_qt = 12.0;
+        s.oil.press_gain_psi_per_pct = 1.35;
+        s.oil.press_offset_psi = -15.0;
+        // Hartzell 4-blade, 94 in
+        s.propeller.diameter_m = 2.39;
+        s.propeller.blades = 4;
+        s.propeller.blade_area_m2 = 0.470;
+        s.propeller.inertia_kg_m2 = 15.0;
+        s.gearbox = Gearbox { ratio: 18.75, efficiency: 0.98, inertia_kg_m2: 18.0 };
+        s.limits = TpLimits {
+            torque_max_nm: 2_250.0 * FTLB, // 850 shp at 2,000 rpm is 2,232 ft lb
+            itt_max_c: 800.0,
+            itt_transient_c: 850.0,
+            itt_start_c: 1_000.0,
+            ng_max_pct: 101.5,
+            np_max_rpm: 2_000.0,
+            np_transient_rpm: 2_200.0,
+            oil_press_min_psi: 100.0,
+            oil_press_min_idle_psi: 60.0,
+            oil_press_max_psi: 135.0,
+            oil_temp_max_c: 104.0,
+        };
+        s
+    }
+
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("spec serialises")
     }

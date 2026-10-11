@@ -22,7 +22,7 @@ fn main() {
             let kind = args.get(1).map(|s| s.as_str()).unwrap_or("turbofan");
             match AnySpec::default_for(kind) {
                 Some(s) => println!("{}", s.to_json()),
-                None => { eprintln!("unknown engine kind {kind} (turbofan | leap1b | piston | turboprop)"); std::process::exit(2) }
+                None => { eprintln!("unknown engine preset {kind}; one of: {}", engine_core::PRESETS.iter().map(|p| p.0).collect::<Vec<_>>().join(" | ")); std::process::exit(2) }
             }
         }
         Some("design") => {
@@ -46,7 +46,7 @@ fn point(args: &[String]) {
     let preset = args.iter().position(|a| a == "--engine").and_then(|i| args.get(i + 1)).map(|s| s.as_str()).unwrap_or("turbofan");
     let spec = match AnySpec::default_for(preset) {
         Some(AnySpec::Turbofan(s)) => s,
-        _ => { eprintln!("point needs a turbofan preset (turbofan | leap1b)"); std::process::exit(2) }
+        _ => { eprintln!("point needs a turbofan preset (turbofan | leap1b | v2500)"); std::process::exit(2) }
     };
     let args: Vec<String> = args.iter().take_while(|a| !a.starts_with("--")).cloned().collect();
     let d = size_design_point(&spec);

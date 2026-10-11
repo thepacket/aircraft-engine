@@ -18,7 +18,7 @@
           <span class="sim-time" id="sim-time">t = 0.0 s</span>
         </div>
         <div class="topbar-right">
-          <label>Engine <select id="engine-kind"><option value="turbofan">CFM56-7B26 turbofan (737NG)</option><option value="leap1b">LEAP-1B28 turbofan (737 MAX)</option><option value="piston">Lycoming O-360 piston</option><option value="turboprop">PT6A-114A turboprop</option></select></label>
+          <label>Engine <select id="engine-kind"></select></label>
           <label>Count <select id="engine-count"><option value="1">1</option><option value="2">2</option></select></label>
           <label>Units <select id="units"><option value="si">SI</option><option value="imp">Imperial</option></select></label>
           <label>Speed
@@ -123,7 +123,7 @@
           <div class="tab-body hidden" id="tab-help">
             <div class="help">
               <h3>Three engines</h3>
-              <p>Pick the engine in the top bar. <b>Turbofan</b> (CFM56-7B26, or the LEAP-1B28 of the 737 MAX): starter, fuel lever at 25% N2, idle at N1 21% (LEAP: 19%). <b>Piston</b> (O-360): mixture rich, 2-3 primer shots cold, magnetos BOTH, crank; mag check at 1,800 rpm. <b>Turboprop</b> (PT6A-114A): prop lever full, starter, condition lever to LOW IDLE at 12-15% Ng, starter off at idle.</p>
+              <p>Pick the engine in the top bar. <b>Turbofan</b> (CFM56-7B26, LEAP-1B28 of the 737 MAX, or V2527-A5 of the A320): starter, fuel lever at 25% N2, idle at N1 21% (LEAP: 19%, V2500: 20%). <b>Piston</b> (O-360, or the O-320 of the Cessna 172): mixture rich, 2-3 primer shots cold, magnetos BOTH, crank; mag check at 1,800 rpm. <b>Turboprop</b> (PT6A-114A, or the PT6A-42 of the King Air B200): prop lever full, starter, condition lever to LOW IDLE at 12-15% Ng, starter off at idle.</p>
               <h3>Scenario script</h3>
               <pre>at 0     starter on
 at 18    fuel on

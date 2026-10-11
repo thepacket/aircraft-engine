@@ -18,8 +18,10 @@ export class SimClient {
   sizing!: DesignSizing;
   version = "";
   kind = "turbofan";
-  /** Preset the spec came from: "turbofan" (CFM56-7B26), "leap1b", "piston", "turboprop" */
+  /** Preset key the spec came from (the engine kind for a custom spec) */
   preset = "turbofan";
+  /** Built-in presets */
+  presets: { key: string; kind: string; name: string; label: string }[] = [];
   engines: number;
   latest: EngineState[] = [];
 
@@ -40,6 +42,7 @@ export class SimClient {
             c.specJson = m.spec;
             c.kind = m.kind ?? "turbofan";
             c.preset = m.preset ?? c.kind;
+            try { c.presets = JSON.parse(m.presets ?? "[]"); } catch { c.presets = []; }
             c.sizing = JSON.parse(m.sizing);
             c.version = m.version;
             c.defaultSpecJson = m.defaultSpec;

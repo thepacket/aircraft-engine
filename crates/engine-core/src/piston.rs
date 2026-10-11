@@ -246,6 +246,46 @@ impl PistonSpec {
         }
     }
 
+    /// Lycoming O-320-E2D: 150 hp at 2,700 rpm, Cessna 172M/N Skyhawk.
+    ///
+    /// Published figures (Lycoming operator's manual, Cessna 172N POH):
+    /// rating, displacement, compression ratio, weight, propeller, limits.
+    /// Calibration knobs are those of the O-360-A4M.
+    pub fn lycoming_o320() -> Self {
+        let mut s = Self::lycoming_o360();
+        s.name = "O-320-E2D".into();
+        s.application = "Cessna 172M / 172N Skyhawk (150 hp)".into();
+        s.rating = PistonRating { rated_power_w: 150.0 * 745.7, rated_rpm: 2_700.0 };
+        s.geometry = PistonGeometry { displacement_m3: 5.240e-3, cylinders: 4, compression_ratio: 7.0, dry_mass_kg: 111.0, engine_inertia_kg_m2: 0.11 };
+        s.induction.idle_rpm = 600.0;
+        s.combustion.indicated_efficiency = 0.385; // 7.0:1 compression
+        // McCauley 1C160/DTM7553: 75 in diameter, 53 in pitch
+        s.propeller.diameter_m = 1.905;
+        s.propeller.blade_area_m2 = 0.120;
+        s.propeller.fixed_pitch_deg = Some(21.5);
+        s.propeller.beta_min_deg = 21.5;
+        s.propeller.beta_max_deg = 21.5;
+        s.propeller.beta_feather_deg = 21.5;
+        s.propeller.beta_reverse_deg = 21.5;
+        s.propeller.inertia_kg_m2 = 0.26;
+        s.oil.sump_qt = 8.0;
+        s.limits = PistonLimits {
+            rpm_max: 2_700.0,
+            cht_max_f: 500.0,
+            cht_cruise_max_f: 435.0,
+            oil_temp_max_f: 245.0,
+            oil_press_min_idle_psi: 25.0,
+            oil_press_min_psi: 60.0,
+            oil_press_max_psi: 90.0,
+            fuel_press_min_psi: 0.5,
+            fuel_press_max_psi: 8.0,
+            mag_drop_rpm: 100.0,
+            mag_drop_max_rpm: 125.0,
+            mag_diff_max_rpm: 50.0,
+        };
+        s
+    }
+
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("spec serialises")
     }

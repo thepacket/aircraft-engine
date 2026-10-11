@@ -11,7 +11,7 @@ engines, with virtual cockpit instrumentation and a data logger. Everything
 runs inside the browser: the web server only delivers static files, and the
 simulation core is Rust compiled to WebAssembly.
 
-Three engine families and four engines, each validated against its published
+Three engine families and seven engines, each validated against its published
 data. Try it at
 https://aircraftengine.fly.dev, no install needed.
 
@@ -27,8 +27,11 @@ https://aircraftengine.fly.dev, no install needed.
 |---|---|---|---|
 | CFM International CFM56-7B26 | two-spool high-bypass turbofan | Boeing 737-800/900 | 26,300 lbf |
 | CFM International LEAP-1B28 | two-spool high-bypass turbofan (BPR 8.6, OPR ~40) | Boeing 737 MAX 8/9 | 29,317 lbf |
+| IAE V2527-A5 | two-spool turbofan (BPR 4.8, EGT read at the LPT exit) | Airbus A320-200 | 26,500 lbf |
 | Lycoming O-360-A4M | 4-cylinder carburetted piston, fixed-pitch prop | Piper PA-28-181 Archer, Cessna 172 class | 180 hp |
+| Lycoming O-320-E2D | 4-cylinder carburetted piston, fixed-pitch prop | Cessna 172M/N Skyhawk | 150 hp |
 | Pratt & Whitney Canada PT6A-114A | free-turbine turboprop, constant-speed prop | Cessna 208B Grand Caravan | 675 shp |
+| Pratt & Whitney Canada PT6A-42 | free-turbine turboprop, constant-speed prop | Beechcraft King Air B200 | 850 shp |
 
 **What it teaches**
 
@@ -74,7 +77,7 @@ aircraft-engine/
 │   │   ├── src/turboprop.rs    PT6A-114A: gas generator, free power turbine, governor, start
 │   │   ├── src/any.rs          Engine-kind dispatcher (one interface for wasm and CLI)
 │   │   ├── src/logger.rs       Fixed-rate CSV data logger
-│   │   └── tests/              validation.rs (CFM56, 29), leap.rs (LEAP-1B, 6), piston.rs (11), turboprop.rs (12)
+│   │   └── tests/              validation.rs (CFM56, 29), leap.rs (LEAP-1B, 6), presets.rs (V2500, O-320, PT6A-42, 7), piston.rs (11), turboprop.rs (12)
 │   ├── engine-wasm/      wasm-bindgen bindings (one Simulator type for all engine kinds)
 │   └── engine-cli/       Native runner: `spec [kind]`, `design`, `point`, `run <script> [--engine kind]`
 ├── web/                  TypeScript IDE (Vite). Static output in web/dist
@@ -235,8 +238,8 @@ Native tools without a browser:
 ```bash
 cargo run -p engine-cli -- point 100            # turbofan takeoff point, SL static
 cargo run -p engine-cli -- point 85 10668 0.78  # N1 85% at FL350 M0.78
-cargo run -p engine-cli -- point 100 --engine leap1b   # same for the LEAP-1B28
-cargo run -p engine-cli -- spec piston          # default spec JSON of an engine kind
+cargo run -p engine-cli -- point 100 --engine leap1b   # same for the LEAP-1B28 (or v2500)
+cargo run -p engine-cli -- spec piston          # default spec JSON of a preset: turbofan, leap1b, v2500, piston, o320, turboprop, pt6a42
 cargo run -p engine-cli -- run web/public/scenarios/01-ground-start.txt > log.csv
 cargo run -p engine-cli -- run web/public/scenarios/piston-01-cold-start.txt --engine piston > log.csv
 cargo run -p engine-cli -- run web/public/scenarios/turboprop-01-start.txt --engine turboprop > log.csv
@@ -251,7 +254,9 @@ links put the scenario, spec and settings into the URL fragment; edits are
 also kept in the browser's local storage.
 
 Each engine kind is a Rust module behind the `AnyEngine` dispatcher and a
-`KindDef` descriptor in `web/src/kinds.ts`. Adding an engine means: a spec
+`KindDef` descriptor in `web/src/kinds.ts`; the engine selector lists the
+`PRESETS` table from `any.rs`, grouped by kind, and the dial limits of
+every family follow the loaded spec's limits block. Adding an engine means: a spec
 struct and model in `crates/engine-core`, a variant in `any.rs`, validation
 tests, and a descriptor listing its dials, controls, faults, signals,
 readouts and lessons. The spec JSON carries a `kind` tag; a document without
@@ -288,6 +293,17 @@ model lands on the published operating points:
 | Cruise FL350 M0.78, N1 85 % | ~4,200 lbf, TSFC 0.62 | 4,000–5,500 lbf, 0.60–0.65 |
 | Idle to 95 % takeoff thrust | ~6 s from ground idle | ≤ 5 s from flight idle (FAR 33.73) |
 | Ground start, fuel-on to idle | ~32 s, EGT peak ~600 °C | 30–60 s, limit 725 °C |
+
+**Presets within a family** share the family's model and calibration and
+differ by their published figures: the V2527-A5 (rating, 100 % speeds, BPR
+4.8, OPR ~27.5, EGT limits of 635 / 610 °C read at the LPT exit; takeoff EGT
+~585 °C, TSFC ~0.37 and cruise ~0.63 lb/lbf/h), the O-320-E2D (150 hp at
+2,700 rpm, 7.0:1, 75 in prop; static ~2,350 rpm, 8,000 ft cruise leaned
+within the 172N POH range) and the PT6A-42 (850 shp, Ng 37,500 rpm, Np
+2,000 rpm, torque 2,230 ft·lb, ITT 800 °C; takeoff torque-limited on a
+standard day, low idle Ng ~60 %). Each has its own validation tests in
+`presets.rs` with deliberately wide tolerances. Adding a preset is a
+function that edits the family's base spec plus a line in `PRESETS`.
 
 **Turbofan (LEAP-1B28):** the same model with the LEAP-1B's published
 rating, geometry, 100 % speeds, bypass ratio 8.6, pressure-ratio class and

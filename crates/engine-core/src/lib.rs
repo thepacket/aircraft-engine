@@ -21,7 +21,7 @@ pub mod propeller;
 pub mod spec;
 pub mod turboprop;
 
-pub use any::{AnyEngine, AnySpec};
+pub use any::{AnyEngine, AnySpec, PRESETS};
 pub use engine::{Controls, Engine, EngineState, Environment, Faults, Mode};
 pub use spec::EngineSpec;
 

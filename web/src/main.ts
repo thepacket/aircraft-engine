@@ -52,6 +52,16 @@ async function main(): Promise<void> {
   (window as unknown as { __ae: unknown }).__ae = { client, parseCsv, autoMap, Replay, KINDS };
 
   $<HTMLSelectElement>("engine-count").value = String(engines);
+  // Engine selector: the built-in presets, grouped by family
+  {
+    const sel = $<HTMLSelectElement>("engine-kind");
+    const groups = new Map<string, HTMLOptGroupElement>();
+    for (const p of client.presets) {
+      let g = groups.get(p.kind);
+      if (!g) { g = document.createElement("optgroup"); g.label = kindDef(p.kind).title; groups.set(p.kind, g); sel.appendChild(g); }
+      const o = document.createElement("option"); o.value = p.key; o.textContent = p.label; g.appendChild(o);
+    }
+  }
   $<HTMLSelectElement>("engine-kind").value = client.preset || kind.kind;
   $<HTMLSelectElement>("units").value = unitSystem();
   const setTitle = (): void => {

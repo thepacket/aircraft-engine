@@ -433,26 +433,70 @@ const turboprop: KindDef = {
 
 export const KINDS: Record<string, KindDef> = { turbofan, piston, turboprop };
 
-/** Descriptor for an engine kind; turbofan dial limits follow the spec's limits block. */
+/** Descriptor for an engine kind; dial limits follow the spec's limits block. */
 export function kindDef(kind: string, spec?: AnySpec): KindDef {
   const def = KINDS[kind] ?? turbofan;
-  if (def !== turbofan || !spec?.limits) return def;
-  const l = spec.limits as Record<string, number>, oil = (spec.oil ?? {}) as Record<string, number>;
-  const n2Max = l.n2_max_pct ?? 105, egtMax = l.egt_takeoff_c ?? 950;
-  const primary: DialDef[] = [
-    { ...def.primary[0], redline: l.n1_max_pct ?? 104 },
-    { ...def.primary[1], max: egtMax > 950 ? 1100 : 1000, redline: egtMax, amber: [l.egt_max_continuous_c ?? egtMax - 25, egtMax] },
-    { ...def.primary[2], max: n2Max > 110 ? 120 : 110, redline: n2Max },
-    def.primary[3],
-  ];
-  const oilMin = l.oil_pressure_min_psi ?? 13, oilTr = l.oil_temp_max_transient_c ?? 160;
-  const secondary: DialDef[] = [
-    { ...def.secondary[0], redlineLow: oilMin, amber: [oilMin, l.oil_pressure_caution_psi ?? oilMin + 7] },
-    { ...def.secondary[1], redline: oilTr, amber: [l.oil_temp_max_continuous_c ?? oilTr - 5, oilTr] },
-    { ...def.secondary[2], max: oil.capacity_qt ?? 22 },
-    def.secondary[3],
-  ];
-  return { ...def, primary, secondary };
+  if (!spec?.limits) return def;
+  const l = spec.limits as Record<string, number>;
+  const niceMax = (v: number, step: number): number => Math.ceil((v * 1.1) / step) * step;
+  if (def === turbofan) {
+    const oil = (spec.oil ?? {}) as Record<string, number>;
+    const n2Max = l.n2_max_pct ?? 105, egtMax = l.egt_takeoff_c ?? 950;
+    const oilMin = l.oil_pressure_min_psi ?? 13, oilTr = l.oil_temp_max_transient_c ?? 160;
+    return { ...def,
+      primary: [
+        { ...def.primary[0], redline: l.n1_max_pct ?? 104 },
+        { ...def.primary[1], max: egtMax > 950 ? 1100 : egtMax < 800 ? 800 : 1000, redline: egtMax, amber: [l.egt_max_continuous_c ?? egtMax - 25, egtMax] },
+        { ...def.primary[2], max: n2Max > 110 ? 120 : 110, redline: n2Max },
+        def.primary[3],
+      ],
+      secondary: [
+        { ...def.secondary[0], max: niceMax(Math.max(oilMin * 4, 100), 50), redlineLow: oilMin, amber: [oilMin, l.oil_pressure_caution_psi ?? oilMin + 7] },
+        { ...def.secondary[1], redline: oilTr, amber: [l.oil_temp_max_continuous_c ?? oilTr - 5, oilTr] },
+        { ...def.secondary[2], max: oil.capacity_qt ?? 22 },
+        def.secondary[3],
+      ],
+    };
+  }
+  if (def === piston) {
+    const rpmMax = l.rpm_max ?? 2700, chtMax = l.cht_max_f ?? 500, chtCruise = l.cht_cruise_max_f ?? 435;
+    const opIdle = l.oil_press_min_idle_psi ?? 25, opMin = l.oil_press_min_psi ?? 55, opMax = l.oil_press_max_psi ?? 95;
+    const fpMin = l.fuel_press_min_psi ?? 0.5, fpMax = l.fuel_press_max_psi ?? 8;
+    const rated = Number((spec.rating as Record<string, number> | undefined)?.rated_rpm ?? rpmMax);
+    return { ...def,
+      primary: [
+        { ...def.primary[0], max: niceMax(rpmMax, 500), redline: rpmMax, green: [Math.round(rated * 0.78 / 100) * 100, rpmMax] },
+        def.primary[1], def.primary[2],
+        { ...def.primary[3], max: niceMax(chtMax, 50), redline: chtMax, amber: [chtCruise, chtMax], green: [200, chtCruise] },
+      ],
+      secondary: [
+        { ...def.secondary[0], max: niceMax(opMax, 20), redlineLow: opIdle, redline: Math.min(opMax * 1.2, niceMax(opMax, 20)), green: [opMin, opMax], amber: [opIdle, opMin] },
+        { ...def.secondary[1], redline: l.oil_temp_max_f ?? 245, green: [140, l.oil_temp_max_f ?? 245] },
+        def.secondary[2],
+        { ...def.secondary[3], max: niceMax(fpMax, 2), redlineLow: fpMin, redline: fpMax, green: [fpMin, fpMax] },
+      ],
+    };
+  }
+  if (def === turboprop) {
+    const ctl = (spec.control ?? {}) as Record<string, number>;
+    const tqMax = (l.torque_max_nm ?? 2671) / 1.355818, ittMax = l.itt_max_c ?? 805, ngMax = l.ng_max_pct ?? 101.6, npMax = l.np_max_rpm ?? 1900;
+    const opIdle = l.oil_press_min_idle_psi ?? 40, opMin = l.oil_press_min_psi ?? 85, opMax = l.oil_press_max_psi ?? 105;
+    return { ...def,
+      primary: [
+        { ...def.primary[0], max: niceMax(tqMax, 100), redline: tqMax, green: [0, tqMax] },
+        { ...def.primary[1], max: niceMax(Math.max(ittMax, l.itt_start_c ?? 1090), 100), redline: ittMax, amber: [ittMax - 40, ittMax] },
+        { ...def.primary[2], redline: ngMax },
+        { ...def.primary[3], max: niceMax(npMax, 100), redline: npMax, green: [ctl.np_min_rpm ?? npMax - 300, npMax] },
+      ],
+      secondary: [
+        def.secondary[0],
+        { ...def.secondary[1], max: niceMax(opMax, 20), redlineLow: opIdle, amber: [opIdle, opMin], green: [opMin, opMax] },
+        { ...def.secondary[2], redline: l.oil_temp_max_c ?? 99, green: [10, l.oil_temp_max_c ?? 99] },
+        def.secondary[3],
+      ],
+    };
+  }
+  return def;
 }
 
 void unitSystem;

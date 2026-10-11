@@ -16,15 +16,46 @@ pub enum AnySpec {
     Turboprop(TurbopropSpec),
 }
 
+/// Built-in engine presets: (key, kind, spec name, label).
+pub const PRESETS: &[(&str, &str, &str, &str)] = &[
+    ("turbofan", "turbofan", "CFM56-7B26", "CFM56-7B26 turbofan (737NG)"),
+    ("leap1b", "turbofan", "LEAP-1B28", "LEAP-1B28 turbofan (737 MAX)"),
+    ("v2500", "turbofan", "V2527-A5", "V2527-A5 turbofan (A320)"),
+    ("piston", "piston", "O-360-A4M", "Lycoming O-360 piston (Archer)"),
+    ("o320", "piston", "O-320-E2D", "Lycoming O-320 piston (172)"),
+    ("turboprop", "turboprop", "PT6A-114A", "PT6A-114A turboprop (Caravan)"),
+    ("pt6a42", "turboprop", "PT6A-42", "PT6A-42 turboprop (King Air)"),
+];
+
 impl AnySpec {
     pub fn default_for(kind: &str) -> Option<Self> {
         match kind {
             "turbofan" | "cfm56" => Some(AnySpec::Turbofan(EngineSpec::cfm56_7b26())),
             "leap1b" | "leap" => Some(AnySpec::Turbofan(EngineSpec::leap_1b28())),
+            "v2500" | "v2527" => Some(AnySpec::Turbofan(EngineSpec::v2527_a5())),
             "piston" | "o360" => Some(AnySpec::Piston(PistonSpec::lycoming_o360())),
-            "turboprop" | "pt6" => Some(AnySpec::Turboprop(TurbopropSpec::pt6a_114a())),
+            "o320" => Some(AnySpec::Piston(PistonSpec::lycoming_o320())),
+            "turboprop" | "pt6" | "pt6a114a" => Some(AnySpec::Turboprop(TurbopropSpec::pt6a_114a())),
+            "pt6a42" => Some(AnySpec::Turboprop(TurbopropSpec::pt6a_42())),
             _ => None,
         }
+    }
+
+    /// Preset key this spec was built from, judged by its name; falls back to
+    /// the engine kind for a custom spec.
+    pub fn preset(&self) -> &'static str {
+        let name = match self {
+            AnySpec::Turbofan(s) => s.name.as_str(),
+            AnySpec::Piston(s) => s.name.as_str(),
+            AnySpec::Turboprop(s) => s.name.as_str(),
+        };
+        PRESETS.iter().find(|p| p.1 == self.kind() && p.2 == name).map(|p| p.0).unwrap_or_else(|| self.kind())
+    }
+
+    /// JSON list of the presets: [{key, kind, name, label}]
+    pub fn presets_json() -> String {
+        let v: Vec<serde_json::Value> = PRESETS.iter().map(|p| serde_json::json!({ "key": p.0, "kind": p.1, "name": p.2, "label": p.3 })).collect();
+        serde_json::to_string(&v).unwrap_or_default()
     }
 
     /// Parse a spec JSON. A document without a `kind` tag is a turbofan spec
