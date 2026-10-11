@@ -7,6 +7,7 @@ at 0    log on
 at 0    ctl prop_lever 1
 at 2    ctl starter on
 at 25   note Ng only 12%: fuel on anyway (do not do this)
+at 24   check beta < 40
 at 25   ctl condition_lever 1
 when itt >= 1090  note HOT START: ITT past 1,090 C. Condition lever CUTOFF, motor 30 s
 when itt >= 1090  ctl condition_lever 0
