@@ -532,6 +532,12 @@ impl EngineSpec {
     /// class, EGT / speed / oil limits. The V2500 reads EGT at the LPT exit,
     /// hence the low EGT numbers and the probe fraction near 1. Calibration
     /// knobs start from the CFM56-7B26 and are approximations.
+    /// Calibration status: at the ICAO databank point for record 1IA003
+    /// (111.2 kN sea-level static, 4.5 % bleed) the databank lists 1.053 kg/s;
+    /// this model gives ~1.23 kg/s (+16 %). Raising the OPR from 27.5 to 35
+    /// changes that by under 2 %, and closing it with component efficiencies
+    /// alone would need values above 0.95, so the gap is left open rather than
+    /// hidden in the constants.
     pub fn v2527_a5() -> Self {
         let mut s = Self::cfm56_7b26();
         s.name = "V2527-A5".into();
