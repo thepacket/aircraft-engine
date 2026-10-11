@@ -332,7 +332,9 @@ impl EngineSpec {
             },
             fadec: FadecSpec {
                 idle_n1_ground_pct: 21.0,
-                idle_n1_flight_pct: 27.0,
+                // Approach idle is set high enough that a go-around reaches 95 % thrust
+                // within the 5 s of 14 CFR 33.73(b) (tests/far33_73.rs)
+                idle_n1_flight_pct: 31.0,
                 idle_n1_per_km: 1.2,
                 idle_n1_anti_ice_pct: 4.0,
                 tla_exponent: 1.3,
@@ -495,7 +497,7 @@ impl EngineSpec {
         s.spools.n1_spooldown_tau_s = 55.0;
         s.spools.n2_spooldown_tau_s = 16.0;
         s.fadec.idle_n1_ground_pct = 19.0;
-        s.fadec.idle_n1_flight_pct = 25.0;
+        s.fadec.idle_n1_flight_pct = 34.0; // approach idle: 95 % thrust within 5 s of a go-around
         // Wf/Ps3 schedules sit lower than the CFM56's: at OPR 40 the same fuel
         // flow is a smaller fraction of the burner pressure.
         s.fadec.accel_wf_p3_vs_n2c = vec![[50.0, 1.25], [60.0, 1.35], [70.0, 1.50], [80.0, 1.60], [90.0, 1.65], [100.0, 1.65], [120.0, 1.65]];
@@ -575,7 +577,7 @@ impl EngineSpec {
         s.spools.n2_idle_pct = 58.0;
         s.spools.n2_vs_n1 = vec![[0.0, 0.0], [20.0, 58.0], [35.0, 69.0], [50.0, 77.0], [70.0, 86.0], [85.0, 92.0], [100.0, 97.0], [104.0, 99.0], [110.0, 101.5]];
         s.fadec.idle_n1_ground_pct = 20.0;
-        s.fadec.idle_n1_flight_pct = 26.0;
+        s.fadec.idle_n1_flight_pct = 32.0; // approach idle; this model still needs ~5.9 s to 95 % thrust (open item)
         // Lower OPR: the same fuel flow is a larger fraction of burner pressure
         s.fadec.accel_wf_p3_vs_n2c = vec![[50.0, 2.25], [60.0, 2.40], [70.0, 2.70], [80.0, 2.95], [90.0, 3.10], [100.0, 3.10], [105.0, 3.10]];
         s.fadec.egt_transient_margin_c = 60.0; // EEC trims the accel fuel as EGT nears the limit (holds the 635 C limit in a slam from 15 % thrust)
@@ -647,7 +649,7 @@ impl EngineSpec {
         s.spools.lp_inertia_kg_m2 = 120.0; // large fan plus the LPT seen through the gear (x9.4)
         s.spools.hp_inertia_kg_m2 = 2.2;
         s.fadec.idle_n1_ground_pct = 17.0;
-        s.fadec.idle_n1_flight_pct = 23.0;
+        s.fadec.idle_n1_flight_pct = 26.0; // approach idle: 95 % thrust within 5 s of a go-around
         // Steady Wf/Ps3 at takeoff is only ~0.70 (kg/h)/kPa at OPR 40 with this fuel flow
         s.fadec.accel_wf_p3_vs_n2c = vec![[50.0, 1.20], [60.0, 1.25], [70.0, 1.40], [80.0, 1.50], [90.0, 1.55], [100.0, 1.55], [120.0, 1.55]];
         s.fadec.decel_wf_p3_vs_n2c = vec![[50.0, 0.40], [60.0, 0.43], [80.0, 0.50], [100.0, 0.55], [120.0, 0.55]]; // idle steady ~0.54

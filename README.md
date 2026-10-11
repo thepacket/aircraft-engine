@@ -337,7 +337,8 @@ model lands on the published operating points:
 | Ground idle N1 / N2 | 21 % / 60 % | 21 % / 60 % |
 | Ground idle fuel flow, EGT | ~1,350 lb/h, ~450 °C | ~1,000–1,400 lb/h, 400–480 °C |
 | Cruise FL350 M0.78, N1 85 % | ~4,200 lbf, TSFC 0.62 | 4,000–5,500 lbf, 0.60–0.65 |
-| 15 % to 95 % takeoff thrust (FAR 33.73 start condition) | 4.4 s (CFM56), 4.6 s (LEAP), 3.7 s (PW1100G), 5.5 s (V2500, open item) | ≤ 5 s |
+| Flight idle to 95 % takeoff thrust (FAR 33.73(b), the applicable start point) | 4.7 s (CFM56), 4.8 s (LEAP), 4.6 s (PW1100G), 5.9 s (V2500, open item) | ≤ 5 s |
+| 15 % to 95 % takeoff thrust (the rule's fallback start point) | 4.4 s (CFM56), 4.6 s (LEAP), 3.7 s (PW1100G), 5.5 s (V2500) | ≤ 5 s |
 | Ground idle to 95 % takeoff thrust | ~6 s | lower start point than the rule's |
 | Ground start, fuel-on to idle | ~32 s, EGT peak ~600 °C | 30–60 s, limit 725 °C |
 
