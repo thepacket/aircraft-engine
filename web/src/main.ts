@@ -239,6 +239,43 @@ async function main(): Promise<void> {
     try { await navigator.clipboard.writeText(url); $("sim-time").textContent = "link copied"; } catch { prompt("Share link", url); }
   });
 
+  // ---- Screenshot -----------------------------------------------------------
+  const btnShot = $<HTMLButtonElement>("btn-screenshot");
+  btnShot.addEventListener("click", async () => {
+    btnShot.disabled = true;
+    const simTime = $("sim-time");
+    const prev = simTime.textContent;
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const app = $("app");
+      const canvas = await html2canvas(app, {
+        backgroundColor: getComputedStyle(document.body).backgroundColor || "#17191c",
+        scale: Math.min(window.devicePixelRatio || 1, 2), useCORS: false, logging: false,
+        // html2canvas draws a textarea as a single line: replace each one in the
+        // clone by a block with the same text, wrapping and scroll position.
+        onclone: (doc) => {
+          doc.querySelectorAll("textarea").forEach((ta) => {
+            const src = document.getElementById(ta.id) as HTMLTextAreaElement | null;
+            const cs = getComputedStyle(src ?? ta);
+            const box = doc.createElement("div");
+            box.textContent = src?.value ?? ta.value;
+            box.style.cssText = `white-space:pre-wrap;overflow-wrap:break-word;overflow:hidden;box-sizing:border-box;font-family:${cs.fontFamily};font-size:${cs.fontSize};line-height:${cs.lineHeight};color:${cs.color};padding:${cs.padding};width:${cs.width};height:${cs.height};flex:${cs.flex};min-height:0;background:transparent;tab-size:4`;
+            const inner = doc.createElement("div"); inner.style.cssText = `margin-top:-${src?.scrollTop ?? 0}px`; inner.textContent = box.textContent; box.textContent = ""; box.appendChild(inner);
+            ta.replaceWith(box);
+          });
+        },
+      });
+      const t = client.latest[focus]?.time_s ?? 0;
+      const name = `${spec.name.replace(/[^A-Za-z0-9]+/g, "_")}_t${t.toFixed(0)}s_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+      canvas.toBlob((blob) => { if (blob) download(name, blob, "image/png"); }, "image/png");
+      simTime.textContent = "screenshot saved";
+      setTimeout(() => { if (simTime.textContent === "screenshot saved") simTime.textContent = prev; }, 1500);
+    } catch (e) {
+      console.error(e);
+      simTime.textContent = "screenshot failed";
+    } finally { btnShot.disabled = false; }
+  });
+
   // ---- Logger -------------------------------------------------------------
   const btnLog = $<HTMLButtonElement>("btn-log");
   const setLogging = (on: boolean): void => { if (on) client.loggerStart(); else client.loggerStop(); };
@@ -520,8 +557,8 @@ async function main(): Promise<void> {
   }
 }
 
-function download(name: string, content: string, type: string): void {
-  const blob = new Blob([content], { type });
+function download(name: string, content: string | Blob, type: string): void {
+  const blob = content instanceof Blob ? content : new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);

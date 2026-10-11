@@ -212,7 +212,10 @@ position in the browser:
   the space (one row of eight in a short panel, three columns in a tall
   one), in single and twin-engine layouts.
 
-Double-click a grip to return to the automatic layout.
+Double-click a grip to return to the automatic layout. The Screenshot
+button on the glareshield saves a PNG of the whole flight deck, named after
+the engine and the simulation time; it is rendered in the browser, so
+nothing leaves the machine.
 
 While a scenario runs, the editor highlights the line of the last event
 applied in white and the conditional `when` lines that are armed and
