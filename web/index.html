@@ -161,6 +161,22 @@ at 200   end</pre>
           <h2>Performance <span class="hint" id="perf-hint">(not shown in a real cockpit)</span></h2>
           <div class="readouts" id="readouts"></div>
         </section>
+        <section class="panel du sweep">
+          <h2>Parametric sweep <span class="hint">(steady state; variables not swept stay at the current settings)</span></h2>
+          <div class="row sweep-row">
+            <label>X <select id="sw-x"></select></label>
+            <label>from <input id="sw-from" type="number" step="any" /></label>
+            <label>to <input id="sw-to" type="number" step="any" /></label>
+            <label>steps <input id="sw-steps" type="number" value="12" min="2" max="60" /></label>
+            <label>Y <select id="sw-y"></select></label>
+            <label>series <select id="sw-s"></select></label>
+            <label>values <input id="sw-sv" type="text" placeholder="e.g. 0, 3000, 6000" /></label>
+            <button id="sw-run" class="btn">Run sweep</button>
+            <button id="sw-csv" class="btn small">CSV</button>
+          </div>
+          <canvas id="sw-canvas"></canvas>
+          <div class="scenario-status" id="sw-status"></div>
+        </section>
         <section class="panel du">
           <h2>Cycle stations</h2>
           <table class="stations" id="stations">

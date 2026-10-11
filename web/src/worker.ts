@@ -13,7 +13,8 @@ type Msg =
   | { type: "spec"; json: string; id: number }
   | { type: "kind"; kind: string; id: number }
   | { type: "csv"; engine: number; id: number }
-  | { type: "faults"; target: number | "all"; patch: Record<string, unknown> | null };
+  | { type: "faults"; target: number | "all"; patch: Record<string, unknown> | null }
+  | { type: "sweep"; id: number; points: { level: number; alt: number; mach: number; disa: number; humidity: number }[]; settle: number };
 
 let sims: Simulator[] = [];
 let speed = 1;
@@ -105,6 +106,13 @@ self.onmessage = async (ev: MessageEvent<Msg>) => {
       case "csv": {
         const s = sims[m.engine];
         (self as unknown as Worker).postMessage({ type: "csv", id: m.id, csv: s ? s.logger_csv() : "" });
+        break;
+      }
+      case "sweep": {
+        // Steady-state points on a copy of engine 1; the running engines are untouched
+        const s = sims[0];
+        const states = m.points.map((p) => s.steady_state_json(p.level, p.alt, p.mach, p.disa, p.humidity, m.settle));
+        (self as unknown as Worker).postMessage({ type: "sweep", id: m.id, states });
         break;
       }
       case "faults": {

@@ -1,0 +1,161 @@
+// Parametric sweeps: steady-state performance against one operating variable,
+// optionally for several values of a second one, drawn as curves on a display
+// unit. Points are settled copies of engine 1 computed in the worker.
+import type { SimClient, SweepPoint } from "./sim";
+import { activeSignals, signal, type Signal } from "./signals";
+import type { AnyState } from "./types";
+import { unitSystem, FT } from "./units";
+
+type Var = "alt" | "mach" | "disa" | "level";
+interface VarDef { key: Var; label: () => string; toSi: (v: number) => number; fromSi: (v: number) => number; def: () => [number, number]; seriesDef: () => string; decimals: number }
+
+const VARS: VarDef[] = [
+  { key: "alt", label: () => (unitSystem() === "si" ? "Altitude (m)" : "Altitude (ft)"), toSi: (v) => (unitSystem() === "si" ? v : v * FT), fromSi: (v) => (unitSystem() === "si" ? v : v / FT), def: () => (unitSystem() === "si" ? [0, 12000] : [0, 40000]), seriesDef: () => (unitSystem() === "si" ? "0, 3000, 6000, 10668" : "0, 10000, 20000, 35000"), decimals: 0 },
+  { key: "mach", label: () => "Mach", toSi: (v) => v, fromSi: (v) => v, def: () => [0, 0.85], seriesDef: () => "0, 0.3, 0.6, 0.8", decimals: 2 },
+  { key: "disa", label: () => "ΔISA (°C)", toSi: (v) => v, fromSi: (v) => v, def: () => [-30, 40], seriesDef: () => "-20, 0, 15, 30", decimals: 0 },
+  { key: "level", label: () => "Lever (%)", toSi: (v) => v / 100, fromSi: (v) => v * 100, def: () => [0, 100], seriesDef: () => "30, 60, 80, 100", decimals: 0 },
+];
+const COLORS = ["#19d3f5", "#ff4fd8", "#39d353", "#ffb300", "#f4f7fa", "#b388ff"];
+
+export interface SweepContext {
+  client: SimClient;
+  /** Current environment (SI) and main lever position, used for the variables not swept */
+  current: () => { alt: number; mach: number; disa: number; humidity: number; level: number };
+}
+
+export function initSweep(ctx: SweepContext): { rebuild: () => void } {
+  const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
+  const xSel = $<HTMLSelectElement>("sw-x"), ySel = $<HTMLSelectElement>("sw-y"), sSel = $<HTMLSelectElement>("sw-s");
+  const from = $<HTMLInputElement>("sw-from"), to = $<HTMLInputElement>("sw-to"), steps = $<HTMLInputElement>("sw-steps"), sVals = $<HTMLInputElement>("sw-sv");
+  const btnRun = $<HTMLButtonElement>("sw-run"), btnCsv = $<HTMLButtonElement>("sw-csv"), status = $("sw-status");
+  const canvas = $<HTMLCanvasElement>("sw-canvas");
+  const ctx2d = canvas.getContext("2d")!;
+  const varOf = (k: string): VarDef => VARS.find((v) => v.key === k) ?? VARS[0];
+
+  let result: { x: VarDef; y: Signal; s: VarDef | null; xs: number[]; series: { label: string; ys: number[] }[]; fixed: string } | null = null;
+
+  const fillVars = (): void => {
+    for (const sel of [xSel, sSel]) {
+      const keep = sel.value;
+      sel.innerHTML = sel === sSel ? `<option value="">none</option>` : "";
+      for (const v of VARS) { const o = document.createElement("option"); o.value = v.key; o.textContent = v.label(); sel.appendChild(o); }
+      sel.value = keep || (sel === xSel ? "alt" : "");
+    }
+  };
+  const rebuild = (): void => {
+    fillVars();
+    const keep = ySel.value;
+    ySel.innerHTML = "";
+    for (const s of activeSignals()) { const o = document.createElement("option"); o.value = s.key; o.textContent = s.label; ySel.appendChild(o); }
+    ySel.value = activeSignals().some((s) => s.key === keep) ? keep : activeSignals().some((s) => s.key === "thrust") ? "thrust" : activeSignals()[0]?.key ?? "";
+    setRange();
+    result = null; draw();
+  };
+  const setRange = (): void => { const [a, b] = varOf(xSel.value).def(); from.value = String(a); to.value = String(b); };
+  xSel.addEventListener("change", setRange);
+  sSel.addEventListener("change", () => { sVals.value = sSel.value ? varOf(sSel.value).seriesDef() : ""; sVals.disabled = !sSel.value; });
+  sVals.disabled = true;
+
+  const run = async (): Promise<void> => {
+    const x = varOf(xSel.value), y = signal(ySel.value), s = sSel.value ? varOf(sSel.value) : null;
+    if (s && s.key === x.key) { status.textContent = "Series variable must differ from the X variable."; return; }
+    const n = Math.min(Math.max(parseInt(steps.value, 10) || 12, 2), 60);
+    const a = parseFloat(from.value), b = parseFloat(to.value);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) { status.textContent = "Enter a numeric range."; return; }
+    const xs = Array.from({ length: n }, (_, i) => a + ((b - a) * i) / (n - 1));
+    const sv = s ? sVals.value.split(/[,\s]+/).map(parseFloat).filter(Number.isFinite).slice(0, 6) : [NaN];
+    if (s && !sv.length) { status.textContent = "Enter series values, e.g. 0, 3000, 6000."; return; }
+    const cur = ctx.current();
+    const base = { alt: cur.alt, mach: cur.mach, disa: cur.disa, humidity: cur.humidity, level: cur.level };
+    const points: SweepPoint[] = [];
+    for (const v of sv) for (const xv of xs) {
+      const p = { ...base };
+      (p as Record<string, number>)[x.key] = x.toSi(xv);
+      if (s) (p as Record<string, number>)[s.key] = s.toSi(v);
+      points.push(p);
+    }
+    btnRun.disabled = true; status.textContent = `Computing ${points.length} steady-state points…`;
+    try {
+      const states: AnyState[] = await ctx.client.sweep(points);
+      const conv = (v: number): number => (unitSystem() === "si" ? v : y.toImp(v));
+      const series = sv.map((v, k) => ({ label: s ? `${s.label().replace(/ \(.*\)$/, "")} ${v}` : y.label, ys: xs.map((_, i) => conv(y.get(states[k * n + i]))) }));
+      const fixedParts = VARS.filter((v) => v.key !== x.key && v.key !== s?.key).map((v) => `${v.label()} ${v.fromSi((base as Record<string, number>)[v.key]).toFixed(v.decimals)}`);
+      result = { x, y, s, xs, series, fixed: fixedParts.join(" · ") };
+      status.textContent = `${points.length} points, others held at ${result.fixed}.`;
+      draw();
+    } catch (e) {
+      status.textContent = `Sweep failed: ${String(e)}`;
+    } finally { btnRun.disabled = false; }
+  };
+  btnRun.addEventListener("click", () => void run());
+  btnCsv.addEventListener("click", () => {
+    if (!result) return;
+    const { x, y, series, xs } = result;
+    const unit = unitSystem() === "si" ? y.unitSi : y.unitImp;
+    const head = [x.label(), ...series.map((s) => `${s.label} (${unit})`)].join(",");
+    const rows = xs.map((xv, i) => [xv, ...series.map((s) => s.ys[i])].map((v) => (Number.isFinite(v) ? String(+v.toFixed(4)) : "")).join(","));
+    const blob = new Blob([[head, ...rows].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `sweep_${y.key}_vs_${x.key}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  });
+
+  const draw = (): void => {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w || !h) return;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+    const c = ctx2d;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, h);
+    c.font = "10px ui-monospace, Menlo, monospace";
+    if (!result) { c.fillStyle = "#5c6670"; c.textAlign = "center"; c.fillText("Choose the variables and press Run sweep", w / 2, h / 2); return; }
+    const { x, y, xs, series } = result;
+    const padL = 52, padR = 10, padT = 18, padB = 26;
+    const pw = w - padL - padR, ph = h - padT - padB;
+    const all = series.flatMap((s) => s.ys).filter(Number.isFinite);
+    let ymin = Math.min(...all), ymax = Math.max(...all);
+    if (!Number.isFinite(ymin)) { ymin = 0; ymax = 1; }
+    if (ymax - ymin < 1e-9) { ymax = ymin + 1; }
+    const pad = (ymax - ymin) * 0.06; ymin -= pad; ymax += pad;
+    if (ymin > 0 && ymin < (ymax - ymin) * 0.5) ymin = 0;
+    const xmin = xs[0], xmax = xs[xs.length - 1];
+    const X = (v: number): number => padL + ((v - xmin) / (xmax - xmin || 1)) * pw;
+    const Y = (v: number): number => padT + ph - ((v - ymin) / (ymax - ymin)) * ph;
+    // grid and axes
+    c.strokeStyle = "#162029"; c.lineWidth = 1; c.fillStyle = "#39d353"; c.textAlign = "right";
+    for (let i = 0; i <= 4; i++) {
+      const v = ymin + ((ymax - ymin) * i) / 4, yy = Y(v);
+      c.beginPath(); c.moveTo(padL, yy); c.lineTo(w - padR, yy); c.stroke();
+      c.fillText(fmt(v), padL - 4, yy + 3);
+    }
+    c.textAlign = "center";
+    for (let i = 0; i <= 4; i++) {
+      const v = xmin + ((xmax - xmin) * i) / 4, xx = X(v);
+      c.beginPath(); c.moveTo(xx, padT); c.lineTo(xx, padT + ph); c.stroke();
+      c.textAlign = i === 0 ? "left" : i === 4 ? "right" : "center";
+      c.fillText(fmt(v), xx, h - 12);
+    }
+    c.textAlign = "center"; c.fillStyle = "#8e98a4"; c.fillText(x.label(), padL + pw / 2, h - 2);
+    const unit = unitSystem() === "si" ? y.unitSi : y.unitImp;
+    c.textAlign = "left"; c.fillStyle = "#19d3f5"; c.fillText(`${y.label}${unit ? " (" + unit + ")" : ""}`, padL + 2, 11);
+    // curves
+    let lx = padL + 2 + c.measureText(`${y.label} (${unit})`).width + 16;
+    series.forEach((s, k) => {
+      const color = COLORS[k % COLORS.length];
+      c.strokeStyle = color; c.lineWidth = 1.6; c.beginPath();
+      let started = false;
+      s.ys.forEach((v, i) => { if (!Number.isFinite(v)) { started = false; return; } const px = X(xs[i]), py = Y(v); if (!started) { c.moveTo(px, py); started = true; } else c.lineTo(px, py); });
+      c.stroke();
+      c.fillStyle = color;
+      s.ys.forEach((v, i) => { if (Number.isFinite(v)) { c.beginPath(); c.arc(X(xs[i]), Y(v), 2, 0, Math.PI * 2); c.fill(); } });
+      if (result!.s) { c.fillText(s.label, lx, 11); lx += c.measureText(s.label).width + 12; }
+    });
+  };
+  new ResizeObserver(draw).observe(canvas);
+  rebuild();
+  return { rebuild };
+}
+
+function fmt(v: number): string {
+  const a = Math.abs(v);
+  return a >= 1000 ? v.toFixed(0) : a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
+}

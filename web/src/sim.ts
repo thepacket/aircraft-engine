@@ -2,6 +2,7 @@
 import type { AnySpec, AnyState, EngineTarget } from "./types";
 
 type StateListener = (states: AnyState[]) => void;
+export interface SweepPoint { level: number; alt: number; mach: number; disa: number; humidity: number }
 type DesignSizing = Record<string, unknown>;
 type EngineSpec = AnySpec;
 type EngineState = AnyState;
@@ -52,6 +53,7 @@ export class SimClient {
             break;
           }
           case "csv": c.settle(m.id, m.csv); break;
+          case "sweep": c.settle(m.id, (m.states as string[]).map((s) => JSON.parse(s) as EngineState)); break;
           case "error": {
             if (m.id !== undefined) c.fail(m.id, new Error(m.message));
             else { console.error("worker:", m.message); if (!ready) reject(new Error(m.message)); }
@@ -89,6 +91,8 @@ export class SimClient {
     return r;
   }
   csv(engine: number): Promise<string> { return this.request<string>({ type: "csv", engine }); }
+  /** Steady-state states at the given operating points (settled copies of engine 1) */
+  sweep(points: SweepPoint[], settle = 40): Promise<EngineState[]> { return this.request<EngineState[]>({ type: "sweep", points, settle }); }
   async setKind(kind: string): Promise<{ spec: EngineSpec; sizing: DesignSizing }> {
     const r = await this.request<{ spec: EngineSpec; sizing: DesignSizing }>({ type: "kind", kind });
     this.specJson = JSON.stringify(r.spec, null, 2);

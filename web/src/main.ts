@@ -2,6 +2,7 @@ import { SimClient } from "./sim";
 import type { AnyState, AnySpec, EngineTarget } from "./types";
 import { Dial, DIAL_ASPECT, bestColumns } from "./instruments";
 import { initSplitters } from "./splitter";
+import { initSweep } from "./sweep";
 import { StripChart } from "./charts";
 import { parseScenario, parseOnOff, ScenarioRunner } from "./scenario";
 import { signal, setActiveSignals, hasSignal } from "./signals";
@@ -206,6 +207,9 @@ async function main(): Promise<void> {
   $("btn-jump-cruise").addEventListener("click", () => { setEnv(kind.cruiseEnv[0], kind.cruiseEnv[1], 0); jumpRunning(kind.cruiseLevel); });
   $("btn-cold").addEventListener("click", () => { client.reset(); setN1Hold(false, NaN, "all"); charts.forEach((c) => c.clear()); });
 
+  // ---- Parametric sweeps ----------------------------------------------------
+  const sweep = initSweep({ client, current: () => { const st = focusState(); return { ...env, level: st ? Number(st.controls[kind.mainLever]) || 0 : 0 }; } });
+
   // ---- Topbar -------------------------------------------------------------
   let paused = false;
   const speedSel = $<HTMLSelectElement>("sim-speed");
@@ -214,7 +218,7 @@ async function main(): Promise<void> {
   const btnPause = $<HTMLButtonElement>("btn-pause");
   btnPause.addEventListener("click", () => { paused = !paused; client.setPaused(paused); btnPause.textContent = paused ? "Resume" : "Pause"; });
   $("btn-reset").addEventListener("click", () => { client.reset(); client.clearFaults("all"); setN1Hold(false, NaN, "all"); charts.forEach((c) => c.clear()); scenarioStop(); replayStop(); refreshFaultPanel(); });
-  $<HTMLSelectElement>("units").addEventListener("change", (e) => { setUnitSystem((e.target as HTMLSelectElement).value as UnitSystem); lsSet(LS.units, unitSystem()); refreshEnvInputs(); });
+  $<HTMLSelectElement>("units").addEventListener("change", (e) => { setUnitSystem((e.target as HTMLSelectElement).value as UnitSystem); lsSet(LS.units, unitSystem()); refreshEnvInputs(); sweep.rebuild(); });
   $<HTMLSelectElement>("engine-count").addEventListener("change", (e) => {
     engines = parseInt((e.target as HTMLSelectElement).value, 10) === 2 ? 2 : 1;
     lsSet(LS.engines, String(engines)); client.setEngines(engines); charts.forEach((c) => c.setEngines(engines)); buildEicas(); refreshTargetRow();
@@ -223,7 +227,7 @@ async function main(): Promise<void> {
     spec = r.spec; kind = kindDef(client.kind, spec); setActiveSignals(kind.signals);
     lsSet(LS.kind, client.preset || kind.kind); if (specJson) lsSet(LS.spec, client.specJson); else lsDel(LS.spec);
     $<HTMLSelectElement>("engine-kind").value = client.preset || kind.kind;
-    setTitle(); buildEicas(); buildControls(); buildFaultPanel(); buildCharts(); buildLessons(); specText.value = client.specJson; showSizing();
+    setTitle(); buildEicas(); buildControls(); buildFaultPanel(); buildCharts(); buildLessons(); specText.value = client.specJson; showSizing(); sweep.rebuild();
     setN1Hold(false, NaN, "all"); env = { alt: 0, mach: 0, disa: 0, humidity: 0.4 }; refreshEnvInputs(); pushEnv(); scenarioStop(); replayStop();
     logTable = null; mapping = null; mappingBox.innerHTML = ""; statsTable.innerHTML = ""; btnReplayRun.disabled = true;
   });
