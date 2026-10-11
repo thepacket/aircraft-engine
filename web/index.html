@@ -72,6 +72,7 @@
             <button class="tab" data-tab="spec">Spec</button>
             <button class="tab" data-tab="faults">Faults</button>
             <button class="tab" data-tab="replay">Replay</button>
+            <button class="tab" data-tab="results">Results</button>
             <button class="tab" data-tab="docs">Model</button>
             <button class="tab" data-tab="help">Help</button>
           </div>
@@ -116,6 +117,17 @@
             <table class="stats" id="replay-stats"></table>
           </div>
 
+          <div class="tab-body hidden" id="tab-results">
+            <div class="row">
+              <span class="hint">Checkpoint results of the lessons run in this browser. Click a run for its details.</span>
+              <button id="btn-results-csv" class="btn small">CSV</button>
+              <button id="btn-results-json" class="btn small">JSON</button>
+              <button id="btn-results-clear" class="btn small btn-warn" style="margin-left:auto">Clear</button>
+            </div>
+            <div class="scenario-status" id="results-summary"></div>
+            <div class="results" id="results"></div>
+          </div>
+
           <div class="tab-body hidden" id="tab-docs">
             <div class="help docs" id="docs"></div>
           </div>
@@ -123,7 +135,7 @@
           <div class="tab-body hidden" id="tab-help">
             <div class="help">
               <h3>Three engines</h3>
-              <p>Pick the engine in the top bar. <b>Turbofan</b> (CFM56-7B26, LEAP-1B28 of the 737 MAX, or V2527-A5 of the A320): starter, fuel lever at 25% N2, idle at N1 21% (LEAP: 19%, V2500: 20%). <b>Piston</b> (O-360, or the O-320 of the Cessna 172): mixture rich, 2-3 primer shots cold, magnetos BOTH, crank; mag check at 1,800 rpm. <b>Turboprop</b> (PT6A-114A, or the PT6A-42 of the King Air B200): prop lever full, starter, condition lever to LOW IDLE at 12-15% Ng, starter off at idle.</p>
+              <p>Pick the engine in the top bar. <b>Turbofan</b> (CFM56-7B26, LEAP-1B28 of the 737 MAX, V2527-A5 of the A320, or the PW1127G-JM geared turbofan of the A320neo): starter, fuel lever at 25% N2, idle at N1 21% (LEAP: 19%, V2500: 20%). <b>Piston</b> (O-360, or the O-320 of the Cessna 172): mixture rich, 2-3 primer shots cold, magnetos BOTH, crank; mag check at 1,800 rpm. <b>Turboprop</b> (PT6A-114A, or the PT6A-42 of the King Air B200): prop lever full, starter, condition lever to LOW IDLE at 12-15% Ng, starter off at idle.</p>
               <h3>Scenario script</h3>
               <pre>at 0     starter on
 at 18    fuel on
@@ -137,7 +149,7 @@ at 18    watch egt &lt; 725    # must hold to the end
 at 90    check n1 &gt;= 20     # evaluated when the line fires
 at 200   end</pre>
               <p>Timed lines: <code>at &lt;s&gt; &lt;cmd&gt;</code>. Conditional lines: <code>when &lt;signal&gt; &lt;op&gt; &lt;value&gt; &lt;cmd&gt;</code>, armed at the preceding <code>at</code> time, fire once. Signals: n1, n2, egt, ff, thrust, oilp, oilt, vib, t4, sm_hpc, alt, mach… (any chart channel).</p>
-              <p>Commands: <code>engine 1|2|all</code>, <code>ctl &lt;control&gt; &lt;value&gt;</code> (any control of the engine: tla, mixture, magnetos, power_lever, prop_lever, condition_lever, carb_heat…), <code>starter</code>, <code>fuel on|off</code> (fuel lever / mixture / condition lever), <code>tla x</code> (main lever), <code>n1 pct|off</code>, <code>alt m</code>, <code>mach x</code>, <code>isa dK</code>, <code>humidity x</code>, <code>running level</code>, <code>antiice</code>, <code>pack</code>, <code>reverser</code>, <code>fault name [value]</code>, <code>bottle</code>, <code>log on|off</code>, <code>speed x</code>, <code>note text</code>, <code>screenshot [label]</code> (saves a PNG of the flight deck), <code>check &lt;signal&gt; &lt;op&gt; &lt;value&gt;</code>, <code>watch &lt;signal&gt; &lt;op&gt; &lt;value&gt;</code>, <code>end</code>. Checkpoints are graded: green when passed, red when failed, with the measured value in the status line.</p>
+              <p>Commands: <code>engine 1|2|all</code>, <code>ctl &lt;control&gt; &lt;value&gt;</code> (any control of the engine: tla, mixture, magnetos, power_lever, prop_lever, condition_lever, carb_heat…), <code>starter</code>, <code>fuel on|off</code> (fuel lever / mixture / condition lever), <code>tla x</code> (main lever), <code>n1 pct|off</code>, <code>alt m</code>, <code>mach x</code>, <code>isa dK</code>, <code>humidity x</code>, <code>running level</code>, <code>antiice</code>, <code>pack</code>, <code>reverser</code>, <code>fault name [value]</code>, <code>bottle</code>, <code>log on|off</code>, <code>speed x</code>, <code>note text</code>, <code>screenshot [label]</code> (saves a PNG of the flight deck), <code>check &lt;signal&gt; &lt;op&gt; &lt;value&gt;</code>, <code>watch &lt;signal&gt; &lt;op&gt; &lt;value&gt;</code>, <code>end</code>. Checkpoints are graded: green when passed, red when failed, with the measured value in the status line. Every graded run is kept in the <b>Results</b> tab (score, per-check details, CSV / JSON export). Lessons written for a specific engine preset are listed first in the lesson dropdown.</p>
               <h3>Faults</h3>
               <p>starter_inop, starter_weak, starter_early_cutout, ignition_fail, start_fuel_factor (1 = normal), fuel_pump_fail, oil_leak_qt_per_min, fire, n1_governor_fail, compressor_damage_pct, fod, egt_probe_fail, reverser_stuck; one-shots: surge, flameout, fire_bottle.</p>
               <h3>Parametric sweep</h3>
@@ -149,7 +161,7 @@ at 200   end</pre>
               <h3>Use</h3>
               <p>Educational tool only. Not a certified training device and not a substitute for the aircraft and engine manuals. MIT licensed; source and model documentation on GitHub.</p>
               <h3>Sharing</h3>
-              <p><b>Share link</b> puts the scenario, a modified spec and the settings into the URL fragment: nothing is sent to the server. Scenario and spec edits are also kept in this browser. <b>Screenshot</b> saves a PNG of the whole flight deck, named after the engine and the simulation time.</p>
+              <p><b>Share link</b> puts the scenario, a modified spec and the settings into the URL fragment: nothing is sent to the server. Scenario and spec edits are also kept in this browser. <b>Screenshot</b> saves a PNG of the whole flight deck, including the part of the centre column scrolled out of view, named after the engine and the simulation time.</p>
             </div>
           </div>
         </section>

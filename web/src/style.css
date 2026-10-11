@@ -200,6 +200,15 @@ table.stats { width: 100%; border-collapse: collapse; font-family: var(--mono); 
 table.stats th, table.stats td { text-align: right; padding: 2px 5px; border-bottom: 1px solid #0f3316; }
 table.stats th { color: var(--accent); font-weight: 500; }
 table.stats th:first-child, table.stats td:first-child { text-align: left; }
+.results { overflow: auto; font-family: var(--mono); font-size: 11px; display: flex; flex-direction: column; gap: 2px; }
+.results .run { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 3px 6px; border-radius: 3px; background: #0a120c; color: #cfe0d4; cursor: pointer; }
+.results .run:hover { background: #0f1a12; }
+.results .run .when { color: var(--muted); }
+.results .run .score { font-weight: 700; color: var(--green); text-align: right; }
+.results .run.failed .score { color: var(--red); }
+.results .run .lesson { grid-column: 1 / -1; color: var(--accent); }
+.results .run .details { grid-column: 1 / -1; white-space: pre-wrap; color: #9fb8a6; border-top: 1px solid #0f3316; padding-top: 3px; margin-top: 2px; }
+.results .run .details .ok { color: var(--green); } .results .run .details .ko { color: var(--red); }
 .docs { font-size: 12px; }
 .docs h1 { font-size: 15px; color: var(--white); margin: 6px 0; }
 .docs h2 { font-size: 13px; color: var(--accent); margin: 14px 0 4px; text-transform: none; letter-spacing: 0; text-shadow: none; }

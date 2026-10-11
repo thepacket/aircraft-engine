@@ -6,7 +6,7 @@ import { initSweep } from "./sweep";
 import { StripChart } from "./charts";
 import { parseScenario, parseOnOff, ScenarioRunner } from "./scenario";
 import { signal, setActiveSignals, hasSignal } from "./signals";
-import { KINDS, kindDef, type KindDef, type ControlDef } from "./kinds";
+import { KINDS, kindDef, lessonsFor, type KindDef, type ControlDef } from "./kinds";
 import { setUnitSystem, unitSystem, fmtFuelFlow, fmtPressure, fmtTemp, FT, type UnitSystem } from "./units";
 import { parseCsv, autoMap, Replay, Comparison, INPUT_CHANNELS, INPUT_UNITS, measuredSignals, type Mapping, type LogTable } from "./replay";
 import { encodeShare, decodeShare } from "./share";
@@ -19,7 +19,14 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return e as T;
 };
 const esc = (s: string): string => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
-const LS = { scenario: "ae.scenario", spec: "ae.spec", units: "ae.units", engines: "ae.engines", charts: "ae.charts", kind: "ae.kind" };
+const LS = { scenario: "ae.scenario", spec: "ae.spec", units: "ae.units", engines: "ae.engines", charts: "ae.charts", kind: "ae.kind", runs: "ae.runs" };
+
+/** One graded lesson run, kept in this browser */
+interface LessonRun {
+  at: string; engine: string; preset: string; lesson: string;
+  passed: number; failed: number; elapsed: number;
+  checks: { line: number; kind: string; text: string; pass: boolean | null; detail: string }[];
+}
 const lsGet = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k: string, v: string): void => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 const lsDel = (k: string): void => { try { localStorage.removeItem(k); } catch { /* ignore */ } };
@@ -260,12 +267,18 @@ async function main(): Promise<void> {
     try {
       const { default: html2canvas } = await import("html2canvas");
       const app = $("app");
+      // Include the part of the centre column that is scrolled out of view
+      const center = $("center");
+      const extra = Math.max(0, center.scrollHeight - center.clientHeight);
       const canvas = await html2canvas(app, {
         backgroundColor: getComputedStyle(document.body).backgroundColor || "#17191c",
         scale: Math.min(window.devicePixelRatio || 1, 2), useCORS: false, logging: false,
+        height: app.offsetHeight + extra, windowHeight: app.offsetHeight + extra,
         // html2canvas draws a textarea as a single line: replace each one in the
         // clone by a block with the same text, wrapping and scroll position.
         onclone: (doc) => {
+          const a = doc.getElementById("app"), c = doc.getElementById("center");
+          if (a && c && extra > 0) { a.style.height = "auto"; a.style.minHeight = `${app.offsetHeight + extra}px`; c.style.overflow = "visible"; }
           doc.querySelectorAll("textarea").forEach((ta) => {
             const src = document.getElementById(ta.id) as HTMLTextAreaElement | null;
             const cs = getComputedStyle(src ?? ta);
@@ -318,12 +331,12 @@ async function main(): Promise<void> {
 
   // ---- Scenario -----------------------------------------------------------
   const scenarioText = $<HTMLTextAreaElement>("scenario-text"), scenarioStatus = $("scenario-status"), presetSel = $<HTMLSelectElement>("scenario-preset");
-  const loadPreset = async (file: string): Promise<void> => { const r = await fetch(`${import.meta.env.BASE_URL}scenarios/${file}`); scenarioText.value = await r.text(); lsSet(LS.scenario, scenarioText.value); };
-  const buildLessons = (): void => { presetSel.innerHTML = ""; for (const [file, label] of kind.lessons) { const o = document.createElement("option"); o.value = file; o.textContent = label; presetSel.appendChild(o); } };
+  const loadPreset = async (file: string): Promise<void> => { const r = await fetch(`${import.meta.env.BASE_URL}scenarios/${file}`); scenarioText.value = await r.text(); lsSet(LS.scenario, scenarioText.value); lessonEdited = false; };
+  const buildLessons = (): void => { presetSel.innerHTML = ""; for (const [file, label] of lessonsFor(kind, client.preset)) { const o = document.createElement("option"); o.value = file; o.textContent = label; presetSel.appendChild(o); } };
   buildLessons();
   presetSel.addEventListener("change", () => void loadPreset(presetSel.value));
-  if (shared?.scenario) scenarioText.value = shared.scenario; else if (lsGet(LS.scenario)) scenarioText.value = lsGet(LS.scenario)!; else await loadPreset(kind.lessons[0][0]);
-  scenarioText.addEventListener("input", () => { lsSet(LS.scenario, scenarioText.value); scenarioHlKey = ""; finishedRunner = null; });
+  if (shared?.scenario) scenarioText.value = shared.scenario; else if (lsGet(LS.scenario)) scenarioText.value = lsGet(LS.scenario)!; else await loadPreset(lessonsFor(kind, client.preset)[0][0]);
+  scenarioText.addEventListener("input", () => { lsSet(LS.scenario, scenarioText.value); scenarioHlKey = ""; finishedRunner = null; lessonEdited = true; });
   // Highlight layer: the current line (last event applied) and the armed conditional lines
   const scenarioHl = $("scenario-hl");
   let scenarioHlKey = "";
@@ -364,9 +377,46 @@ async function main(): Promise<void> {
     return `checks: ${s.passed} passed, ${s.failed} failed${s.pending ? `, ${s.pending} open` : ""}\n${lines.join("\n")}`;
   };
   const scenarioStop = (): void => {
-    if (runner) { runner.stop(); finishedRunner = runner; if (runner.results.length) { const s = runner.summary; lastNote = `Finished: ${s.passed} of ${s.passed + s.failed} checks passed`; } }
+    if (runner) {
+      runner.stop(); finishedRunner = runner;
+      if (runner.results.length) {
+        const s = runner.summary;
+        lastNote = `Finished: ${s.passed} of ${s.passed + s.failed} checks passed`;
+        recordRun({ at: new Date().toISOString(), engine: spec.name, preset: client.preset || kind.kind, lesson: lessonLabel(), passed: s.passed, failed: s.failed, elapsed: Math.round(runner.elapsed), checks: runner.results.map((r) => ({ line: r.line, kind: r.kind, text: r.text, pass: r.pass, detail: r.detail })) });
+      }
+    }
     runner = null; btnRun.disabled = false; btnStop.disabled = true;
   };
+  // ---- Results: graded lesson runs kept in this browser ----------------------
+  let lessonEdited = false;
+  const lessonLabel = (): string => `${presetSel.selectedOptions[0]?.textContent ?? "Scenario"}${lessonEdited ? " (edited)" : ""}`;
+  const loadRuns = (): LessonRun[] => { try { return JSON.parse(lsGet(LS.runs) ?? "[]") as LessonRun[]; } catch { return []; } };
+  let runs: LessonRun[] = loadRuns();
+  const saveRuns = (): void => { lsSet(LS.runs, JSON.stringify(runs.slice(-200))); };
+  const resultsBox = $("results"), resultsSummary = $("results-summary");
+  const renderRuns = (): void => {
+    if (!runs.length) { resultsSummary.textContent = "No graded runs yet. Lessons with check / watch lines are recorded here when they finish."; resultsBox.innerHTML = ""; return; }
+    const best = new Map<string, number>();
+    for (const r of runs) { const k = `${r.preset}|${r.lesson}`; const score = r.passed / Math.max(1, r.passed + r.failed); best.set(k, Math.max(best.get(k) ?? 0, score)); }
+    const clean = runs.filter((r) => r.failed === 0).length;
+    resultsSummary.textContent = `${runs.length} run${runs.length === 1 ? "" : "s"}, ${clean} with every check passed, ${best.size} lesson${best.size === 1 ? "" : "s"} attempted.`;
+    resultsBox.innerHTML = [...runs].reverse().map((r, i) => {
+      const total = r.passed + r.failed;
+      const details = r.checks.map((c) => `<span class="${c.pass ? "ok" : "ko"}">${c.pass === null ? "…" : c.pass ? "✓" : "✗"}</span> line ${c.line}: ${esc(c.kind)} ${esc(c.text)}${c.detail ? " (" + esc(c.detail) + ")" : ""}`).join("\n");
+      return `<div class="run${r.failed ? " failed" : ""}" data-i="${i}"><span class="when">${esc(r.at.replace("T", " ").slice(0, 16))} · ${esc(r.engine)} · t+${r.elapsed} s</span><span class="score">${r.passed}/${total}</span><span class="lesson">${esc(r.lesson)}</span><div class="details hidden">${details}</div></div>`;
+    }).join("");
+  };
+  const recordRun = (run: LessonRun): void => { runs.push(run); saveRuns(); renderRuns(); };
+  resultsBox.addEventListener("click", (e) => { const row = (e.target as HTMLElement).closest(".run"); row?.querySelector(".details")?.classList.toggle("hidden"); });
+  $("btn-results-clear").addEventListener("click", () => { if (runs.length && confirm("Delete all recorded runs?")) { runs = []; saveRuns(); renderRuns(); } });
+  $("btn-results-json").addEventListener("click", () => download("lesson-results.json", JSON.stringify(runs, null, 2), "application/json"));
+  $("btn-results-csv").addEventListener("click", () => {
+    const q = (v: unknown): string => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = ["at,engine,preset,lesson,score,elapsed_s,line,kind,text,pass,detail"];
+    for (const r of runs) for (const c of r.checks) rows.push([r.at, r.engine, r.preset, r.lesson, `${r.passed}/${r.passed + r.failed}`, r.elapsed, c.line, c.kind, c.text, c.pass === null ? "" : c.pass ? "pass" : "fail", c.detail].map(q).join(","));
+    download("lesson-results.csv", rows.join("\n"), "text/csv");
+  });
+  renderRuns();
   btnRun.addEventListener("click", () => {
     const { events, errors } = parseScenario(scenarioText.value);
     if (errors.length) { scenarioStatus.textContent = errors.join("\n"); scenarioStatus.classList.add("err"); return; }

@@ -11,7 +11,7 @@ engines, with virtual cockpit instrumentation and a data logger. Everything
 runs inside the browser: the web server only delivers static files, and the
 simulation core is Rust compiled to WebAssembly.
 
-Three engine families and seven engines, each validated against its published
+Three engine families and eight engines, each validated against its published
 data. Try it at
 https://aircraftengine.fly.dev, no install needed.
 
@@ -28,6 +28,7 @@ https://aircraftengine.fly.dev, no install needed.
 | CFM International CFM56-7B26 | two-spool high-bypass turbofan | Boeing 737-800/900 | 26,300 lbf |
 | CFM International LEAP-1B28 | two-spool high-bypass turbofan (BPR 8.6, OPR ~40) | Boeing 737 MAX 8/9 | 29,317 lbf |
 | IAE V2527-A5 | two-spool turbofan (BPR 4.8, EGT read at the LPT exit) | Airbus A320-200 | 26,500 lbf |
+| Pratt & Whitney PW1127G-JM | geared turbofan (BPR 12.5, 3.06:1 fan drive gearbox) | Airbus A320neo | 27,075 lbf |
 | Lycoming O-360-A4M | 4-cylinder carburetted piston, fixed-pitch prop | Piper PA-28-181 Archer, Cessna 172 class | 180 hp |
 | Lycoming O-320-E2D | 4-cylinder carburetted piston, fixed-pitch prop | Cessna 172M/N Skyhawk | 150 hp |
 | Pratt & Whitney Canada PT6A-114A | free-turbine turboprop, constant-speed prop | Cessna 208B Grand Caravan | 675 shp |
@@ -44,10 +45,13 @@ https://aircraftengine.fly.dev, no install needed.
 - Abnormals: hot, hung and wet starts, compressor surge and surge cycling,
   flameout and auto-relight, windmill restart envelope, oil leak to seizure,
   fire drill, governor failure, instrument failure; all through injectable
-  faults and 27 scripted lessons (15 turbofan, 6 piston, 6 turboprop).
+  faults and 37 scripted lessons (15 turbofan, 6 piston, 6 turboprop, plus
+  two per newer preset with checkpoints tuned to that engine).
 - Assessment: `check` and `watch` lines in a lesson script set pass/fail
   criteria on any signal (EGT under the start limit, idle N1 in range, 95 %
-  thrust within the FAR 33.73 time) and the IDE reports the results.
+  thrust within the FAR 33.73 time) and the IDE reports the results. Every
+  graded run is kept in the Results tab with its engine, lesson, score and
+  per-check details, and exports as CSV or JSON.
 - Parametric sweeps: steady-state thrust, TSFC, EGT or any other signal
   against altitude, Mach, ISA deviation or lever position, with a second
   variable as curve family, plotted and exportable as CSV.
@@ -77,7 +81,7 @@ aircraft-engine/
 │   │   ├── src/turboprop.rs    PT6A-114A: gas generator, free power turbine, governor, start
 │   │   ├── src/any.rs          Engine-kind dispatcher (one interface for wasm and CLI)
 │   │   ├── src/logger.rs       Fixed-rate CSV data logger
-│   │   └── tests/              validation.rs (CFM56, 29), leap.rs (LEAP-1B, 6), presets.rs (V2500, O-320, PT6A-42, 7), piston.rs (11), turboprop.rs (12)
+│   │   └── tests/              validation.rs (CFM56, 29), leap.rs (LEAP-1B, 6), presets.rs (V2500, PW1100G, O-320, PT6A-42, 10), piston.rs (11), turboprop.rs (12)
 │   ├── engine-wasm/      wasm-bindgen bindings (one Simulator type for all engine kinds)
 │   └── engine-cli/       Native runner: `spec [kind]`, `design`, `point`, `run <script> [--engine kind]`
 ├── web/                  TypeScript IDE (Vite). Static output in web/dist
@@ -217,9 +221,10 @@ position in the browser:
   one), in single and twin-engine layouts.
 
 Double-click a grip to return to the automatic layout. The Screenshot
-button on the glareshield saves a PNG of the whole flight deck, named after
-the engine and the simulation time; it is rendered in the browser, so
-nothing leaves the machine.
+button on the glareshield saves a PNG of the whole flight deck, including
+the part of the centre column scrolled out of view, named after the engine
+and the simulation time; it is rendered in the browser, so nothing leaves
+the machine.
 
 While a scenario runs, the editor highlights the line of the last event
 applied in white and the conditional `when` lines that are armed and
@@ -239,7 +244,7 @@ Native tools without a browser:
 cargo run -p engine-cli -- point 100            # turbofan takeoff point, SL static
 cargo run -p engine-cli -- point 85 10668 0.78  # N1 85% at FL350 M0.78
 cargo run -p engine-cli -- point 100 --engine leap1b   # same for the LEAP-1B28 (or v2500)
-cargo run -p engine-cli -- spec piston          # default spec JSON of a preset: turbofan, leap1b, v2500, piston, o320, turboprop, pt6a42
+cargo run -p engine-cli -- spec piston          # default spec JSON of a preset: turbofan, leap1b, v2500, pw1100g, piston, o320, turboprop, pt6a42
 cargo run -p engine-cli -- run web/public/scenarios/01-ground-start.txt > log.csv
 cargo run -p engine-cli -- run web/public/scenarios/piston-01-cold-start.txt --engine piston > log.csv
 cargo run -p engine-cli -- run web/public/scenarios/turboprop-01-start.txt --engine turboprop > log.csv
@@ -301,9 +306,19 @@ differ by their published figures: the V2527-A5 (rating, 100 % speeds, BPR
 2,700 rpm, 7.0:1, 75 in prop; static ~2,350 rpm, 8,000 ft cruise leaned
 within the 172N POH range) and the PT6A-42 (850 shp, Ng 37,500 rpm, Np
 2,000 rpm, torque 2,230 ft·lb, ITT 800 °C; takeoff torque-limited on a
-standard day, low idle Ng ~60 %). Each has its own validation tests in
-`presets.rs` with deliberately wide tolerances. Adding a preset is a
-function that edits the family's base spec plus a line in `PRESETS`.
+standard day, low idle Ng ~60 %) and the PW1127G-JM geared turbofan (27,075
+lbf, BPR 12.5, OPR 40, fan at 3,281 rpm driven through a 3.0625:1 gearbox;
+the LP turbine speed is reported separately, the LP inertia is referred to
+the fan; takeoff TSFC ~0.23, cruise ~0.55, no worse than the LEAP-1B in
+this model). Each has its own validation tests in `presets.rs` with
+deliberately wide tolerances, including a deceleration-to-idle check for
+every turbofan. Adding a preset is a function that edits the family's base
+spec plus a line in `PRESETS`.
+
+The V2500 and the PW1100G also use the model's transient EGT limiting
+(`egt_transient_margin_c`): within that margin of the takeoff EGT limit the
+EEC blends the acceleration fuel limit down to the steady fuel, as the real
+controllers do, instead of relying on the Wf/Ps3 schedule alone.
 
 **Turbofan (LEAP-1B28):** the same model with the LEAP-1B's published
 rating, geometry, 100 % speeds, bypass ratio 8.6, pressure-ratio class and
