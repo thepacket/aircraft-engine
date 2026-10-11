@@ -1,6 +1,8 @@
-// EICAS-style round dials drawn in SVG (Boeing 737NG display conventions:
-// white scale and pointer, digital readout in a box, red radial at the limit,
-// amber caution band).
+// EICAS-style round dials drawn in SVG (Boeing 737NG display unit
+// conventions): round black instrument face inside a dark bezel, grey scale
+// arc, white ticks and pointer, a white arc that fills from the scale start
+// to the pointer, a boxed digital readout, red radial at the limit, amber
+// caution band, magenta reference bug.
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -27,6 +29,22 @@ export interface DialOptions {
 const START_DEG = -210; // scale start angle (degrees, 0 = 3 o'clock, clockwise)
 const SWEEP_DEG = 240;
 
+const C = {
+  white: "#f4f7fa",
+  scale: "#8e98a4",
+  tick: "#dfe6ee",
+  label: "#19d3f5",
+  amber: "#ffb300",
+  red: "#ff3d3d",
+  green: "#39d353",
+  magenta: "#ff4fd8",
+  face: "#040608",
+  bezel: "#1a1e24",
+  rim: "#2d333b",
+};
+
+let gradientCounter = 0;
+
 function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
   const e = document.createElementNS(NS, tag);
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
@@ -47,28 +65,50 @@ function arcPath(cx: number, cy: number, r: number, a0: number, a1: number): str
 
 export class Dial {
   private svg: SVGSVGElement;
-  private pointer?: SVGLineElement;
+  private pointer?: SVGPolygonElement;
+  private fillArc?: SVGPathElement;
   private bugEl?: SVGPolygonElement;
   private valueText: SVGTextElement;
   private valueBox: SVGRectElement;
   private readonly cx = 100;
-  private readonly cy = 95;
-  private readonly r = 62;
+  private readonly cy = 92;
+  private readonly r = 60;
   private opts: DialOptions;
 
   constructor(container: HTMLElement, opts: DialOptions) {
     this.opts = opts;
-    const svg = el("svg", { viewBox: "0 0 200 170" });
+    const svg = el("svg", { viewBox: "0 0 200 176", class: "dial-svg" });
     this.svg = svg;
     container.appendChild(svg);
     const { cx, cy, r } = this;
 
+    // Bezel and face
+    const gid = `dial-face-${gradientCounter++}`;
+    const defs = el("defs", {});
+    const grad = el("radialGradient", { id: gid, cx: "50%", cy: "45%", r: "60%" });
+    grad.appendChild(el("stop", { offset: "0%", "stop-color": "#0d1115" }));
+    grad.appendChild(el("stop", { offset: "100%", "stop-color": C.face }));
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+    const bezelR = r + 20;
+    svg.appendChild(el("circle", { cx, cy, r: bezelR + 2, fill: C.rim }));
+    svg.appendChild(el("circle", { cx, cy, r: bezelR, fill: C.bezel }));
+    svg.appendChild(el("circle", { cx, cy, r: bezelR - 4, fill: `url(#${gid})`, stroke: "#000", "stroke-width": 1 }));
+    // Bezel screws
+    for (const a of [-135, -45, 45, 135]) {
+      const [sx, sy] = polar(cx, cy, bezelR - 1.5, a);
+      svg.appendChild(el("circle", { cx: sx, cy: sy, r: 1.6, fill: "#3b424b" }));
+    }
+
     if (!opts.digitalOnly) {
       // Scale arc
-      svg.appendChild(el("path", { d: arcPath(cx, cy, r, START_DEG, START_DEG + SWEEP_DEG), stroke: "#e8eef4", "stroke-width": 2, fill: "none" }));
-      // Bands
-      if (opts.green) this.band(opts.green[0], opts.green[1], "#4caf50", 5);
-      if (opts.amber) this.band(opts.amber[0], opts.amber[1], "#ffb300", 5);
+      svg.appendChild(el("path", { d: arcPath(cx, cy, r, START_DEG, START_DEG + SWEEP_DEG), stroke: C.scale, "stroke-width": 2, fill: "none" }));
+      // Bands (outside the scale)
+      if (opts.green) this.band(opts.green[0], opts.green[1], C.green, 4);
+      if (opts.amber) this.band(opts.amber[0], opts.amber[1], C.amber, 4);
+      // Fill arc from the scale start to the pointer
+      this.fillArc = el("path", { d: "", stroke: C.white, "stroke-width": 3.5, fill: "none", "stroke-linecap": "butt" });
+      svg.appendChild(this.fillArc);
       // Ticks and labels
       const n = 10;
       for (let i = 0; i <= n; i++) {
@@ -77,10 +117,10 @@ export class Dial {
         const major = i % 2 === 0;
         const [x0, y0] = polar(cx, cy, r, a);
         const [x1, y1] = polar(cx, cy, r - (major ? 9 : 5), a);
-        svg.appendChild(el("line", { x1: x0, y1: y0, x2: x1, y2: y1, stroke: "#e8eef4", "stroke-width": major ? 2 : 1 }));
+        svg.appendChild(el("line", { x1: x0, y1: y0, x2: x1, y2: y1, stroke: C.tick, "stroke-width": major ? 2 : 1 }));
         if (major) {
-          const [tx, ty] = polar(cx, cy, r - 19, a);
-          const t = el("text", { x: tx, y: ty + 3.5, "text-anchor": "middle", fill: "#cfd8e2", "font-size": 9, "font-family": "ui-monospace, Menlo, monospace" });
+          const [tx, ty] = polar(cx, cy, r - 18, a);
+          const t = el("text", { x: tx, y: ty + 3.5, "text-anchor": "middle", fill: C.tick, "font-size": 9, "font-family": "ui-monospace, Menlo, monospace" });
           t.textContent = String(Math.round(v));
           svg.appendChild(t);
         }
@@ -88,24 +128,26 @@ export class Dial {
       // Red lines
       if (opts.redline !== undefined) this.redline(opts.redline);
       if (opts.redlineLow !== undefined) this.redline(opts.redlineLow);
-      // Pointer
-      this.pointer = el("line", { x1: cx, y1: cy, x2: cx, y2: cy - r + 2, stroke: "#ffffff", "stroke-width": 3, "stroke-linecap": "round" });
+      // Pointer: tapered needle rotated about the hub
+      this.pointer = el("polygon", { points: `0,-${r - 3} 2.6,0 0,8 -2.6,0`, fill: C.white, transform: `translate(${cx},${cy}) rotate(${START_DEG + 90})` });
       svg.appendChild(this.pointer);
-      svg.appendChild(el("circle", { cx, cy, r: 4, fill: "#ffffff" }));
+      svg.appendChild(el("circle", { cx, cy, r: 5, fill: C.white }));
+      svg.appendChild(el("circle", { cx, cy, r: 2, fill: "#2a2f36" }));
       if (opts.bug) {
-        this.bugEl = el("polygon", { points: "0,0 -5,-9 5,-9", fill: "#b388ff" });
+        this.bugEl = el("polygon", { points: "0,0 -5,-9 5,-9", fill: C.magenta });
         svg.appendChild(this.bugEl);
       }
     }
     // Digital readout box
-    const bw = opts.digitalOnly ? 96 : 76;
-    this.valueBox = el("rect", { x: cx - bw / 2, y: opts.digitalOnly ? cy - 30 : cy + 18, width: bw, height: 24, fill: "#000", stroke: "#8a9bb0", "stroke-width": 1, rx: 2 });
+    const bw = opts.digitalOnly ? 92 : 72;
+    const by = opts.digitalOnly ? cy - 28 : cy + 20;
+    this.valueBox = el("rect", { x: cx - bw / 2, y: by, width: bw, height: 22, fill: "#000", stroke: C.white, "stroke-width": 1.2, rx: 1 });
     svg.appendChild(this.valueBox);
-    this.valueText = el("text", { x: cx + bw / 2 - 6, y: opts.digitalOnly ? cy - 12 : cy + 36, "text-anchor": "end", fill: "#ffffff", "font-size": 18, "font-family": "ui-monospace, Menlo, monospace", "font-weight": 600 });
+    this.valueText = el("text", { x: cx + bw / 2 - 5, y: by + 16.5, "text-anchor": "end", fill: C.white, "font-size": 17, "font-family": "ui-monospace, Menlo, monospace", "font-weight": 600 });
     this.valueText.textContent = "---";
     svg.appendChild(this.valueText);
     // Label
-    const label = el("text", { x: cx, y: 160, "text-anchor": "middle", fill: "#4fc3f7", "font-size": 12, "font-family": "-apple-system, Helvetica, Arial, sans-serif", "font-weight": 600 });
+    const label = el("text", { x: cx, y: 170, "text-anchor": "middle", fill: C.label, "font-size": 11, "font-family": "-apple-system, Helvetica, Arial, sans-serif", "font-weight": 700, "letter-spacing": 0.6 });
     label.textContent = opts.unit ? `${opts.label}  ${opts.unit}` : opts.label;
     svg.appendChild(label);
   }
@@ -125,38 +167,43 @@ export class Dial {
     const a = this.angle(v);
     const [x0, y0] = polar(this.cx, this.cy, this.r - 2, a);
     const [x1, y1] = polar(this.cx, this.cy, this.r + 9, a);
-    this.svg.appendChild(el("line", { x1: x0, y1: y0, x2: x1, y2: y1, stroke: "#ff3d3d", "stroke-width": 3.5 }));
+    this.svg.appendChild(el("line", { x1: x0, y1: y0, x2: x1, y2: y1, stroke: C.red, "stroke-width": 3.5 }));
   }
 
   set(value: number, bug?: number, valid = true): void {
     const d = this.opts.decimals ?? 0;
     if (!valid || !Number.isFinite(value)) {
       this.valueText.textContent = "---";
-      this.valueText.setAttribute("fill", "#ffb300");
-      this.valueBox.setAttribute("stroke", "#ffb300");
-      if (this.pointer) { this.pointer.setAttribute("x2", String(this.cx)); this.pointer.setAttribute("y2", String(this.cy - this.r + 2)); this.pointer.setAttribute("visibility", "hidden"); }
+      this.valueText.setAttribute("fill", C.amber);
+      this.valueBox.setAttribute("stroke", C.amber);
+      this.pointer?.setAttribute("visibility", "hidden");
+      this.fillArc?.setAttribute("d", "");
       return;
     }
-    if (this.pointer) this.pointer.setAttribute("visibility", "visible");
+    this.pointer?.setAttribute("visibility", "visible");
     this.valueText.textContent = value.toFixed(d);
     if (this.pointer) {
       const a = this.angle(value);
-      const [x, y] = polar(this.cx, this.cy, this.r - 2, a);
-      this.pointer.setAttribute("x2", x.toFixed(2));
-      this.pointer.setAttribute("y2", y.toFixed(2));
+      this.pointer.setAttribute("transform", `translate(${this.cx},${this.cy}) rotate(${(a + 90).toFixed(2)})`);
+      if (this.fillArc) {
+        const a0 = this.angle(this.opts.min);
+        this.fillArc.setAttribute("d", a - a0 > 0.5 ? arcPath(this.cx, this.cy, this.r, a0, a) : "");
+      }
     }
     if (this.bugEl && bug !== undefined) {
       const a = this.angle(bug);
       const [x, y] = polar(this.cx, this.cy, this.r + 6, a);
       this.bugEl.setAttribute("transform", `translate(${x.toFixed(2)},${y.toFixed(2)}) rotate(${(a + 90).toFixed(1)})`);
     }
-    // Exceedance colouring of the readout
-    let color = "#ffffff";
+    // Exceedance colouring of the readout, pointer and fill arc
+    let color = C.white;
     const o = this.opts;
-    if (o.redline !== undefined && value > o.redline) color = "#ff3d3d";
-    else if (o.redlineLow !== undefined && value < o.redlineLow) color = "#ff3d3d";
-    else if (o.amber && value >= o.amber[0] && value <= o.amber[1]) color = "#ffb300";
+    if (o.redline !== undefined && value > o.redline) color = C.red;
+    else if (o.redlineLow !== undefined && value < o.redlineLow) color = C.red;
+    else if (o.amber && value >= o.amber[0] && value <= o.amber[1]) color = C.amber;
     this.valueText.setAttribute("fill", color);
-    this.valueBox.setAttribute("stroke", color === "#ffffff" ? "#8a9bb0" : color);
+    this.valueBox.setAttribute("stroke", color);
+    this.pointer?.setAttribute("fill", color);
+    this.fillArc?.setAttribute("stroke", color);
   }
 }
