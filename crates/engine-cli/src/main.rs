@@ -46,7 +46,7 @@ fn point(args: &[String]) {
     let preset = args.iter().position(|a| a == "--engine").and_then(|i| args.get(i + 1)).map(|s| s.as_str()).unwrap_or("turbofan");
     let spec = match AnySpec::default_for(preset) {
         Some(AnySpec::Turbofan(s)) => s,
-        _ => { eprintln!("point needs a turbofan preset (turbofan | leap1b | v2500)"); std::process::exit(2) }
+        _ => { eprintln!("point needs a turbofan preset (turbofan | leap1b | v2500 | pw1100g)"); std::process::exit(2) }
     };
     let args: Vec<String> = args.iter().take_while(|a| !a.starts_with("--")).cloned().collect();
     let d = size_design_point(&spec);

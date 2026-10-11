@@ -119,6 +119,8 @@ pub struct EngineState {
     pub n1_pct: f64,
     pub n2_pct: f64,
     pub n1_rpm: f64,
+    /// LP turbine speed (fan rpm times the fan gear ratio)
+    pub lpt_rpm: f64,
     pub n2_rpm: f64,
     pub n1_corrected_pct: f64,
     pub n2_corrected_pct: f64,
@@ -731,6 +733,13 @@ impl Engine {
                 // The decel floor protects against lean blow-out; it can never ask
                 // for more than the steady fuel (that would be over-fuelling).
                 self.wf_min = (interp(&fd.decel_wf_p3_vs_n2c, n2c_pct) * self.ps3_kpa / 3600.0).max(fd.min_fuel_kg_s.min(ss.wf_kg_s));
+                // Transient EGT limiting: blend the accel limit down to the steady
+                // fuel as the sensed EGT approaches the takeoff limit.
+                if fd.egt_transient_margin_c > 0.0 {
+                    let egt_c = self.egt_sensed_k - 273.15;
+                    let f = ((spec.limits.egt_takeoff_c - egt_c) / fd.egt_transient_margin_c).clamp(0.0, 1.0);
+                    self.wf_max = ss.wf_kg_s + (self.wf_max - ss.wf_kg_s) * f;
+                }
                 // After a surge the FADEC re-arms the accel schedule gradually
                 // (no slam re-acceleration into a stalled compressor).
                 if self.surge_recovery_s > 0.0 {
@@ -977,6 +986,7 @@ impl Engine {
             n1_pct: self.n1,
             n2_pct: self.n2,
             n1_rpm: n1f * d.n1_100pct_rpm,
+            lpt_rpm: n1f * d.n1_100pct_rpm * d.fan_gear_ratio,
             n2_rpm: n2f * d.n2_100pct_rpm,
             n1_corrected_pct: self.n1 / st,
             n2_corrected_pct: self.n2 / st,

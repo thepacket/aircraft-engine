@@ -55,6 +55,11 @@ pub struct FadecSpec {
     /// Flat rating: above the corner-point OAT the FADEC holds takeoff EGT
     /// (rated EGT at ISA + flat rating delta) by reducing N1.
     pub egt_flat_rating: bool,
+    /// Transient EGT limiting during accelerations: within this many degrees
+    /// of the takeoff EGT limit the EEC blends the acceleration fuel limit
+    /// down to the steady fuel. 0 disables it (schedule-only limiting).
+    #[serde(default)]
+    pub egt_transient_margin_c: f64,
 }
 
 /// Bleed air and variable geometry.
@@ -154,6 +159,14 @@ pub struct DesignPoint {
     /// that has already occurred where the thermocouples sit (CFM56-7B: LPT
     /// stage 2 nozzle, early in the LPT).
     pub egt_probe_lpt_fraction: f64,
+    /// Fan drive gear ratio (LP turbine rpm / fan rpm); 1 for a direct-drive
+    /// fan. N1 is the fan speed; the LP spool inertia is referred to the fan.
+    #[serde(default = "one")]
+    pub fan_gear_ratio: f64,
+}
+
+fn one() -> f64 {
+    1.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -295,6 +308,7 @@ impl EngineSpec {
                 compressor_efficiency_falloff: 0.70,
                 turbine_efficiency_falloff: 0.30,
                 egt_probe_lpt_fraction: 0.15,
+                fan_gear_ratio: 1.0,
             },
             spools: Spools {
                 n1_idle_pct: 21.0,
@@ -342,6 +356,7 @@ impl EngineSpec {
                 min_fuel_kg_s: 0.08,
                 fuel_lag_s: 0.15,
                 egt_flat_rating: true,
+                egt_transient_margin_c: 0.0,
             },
             bleed: BleedSpec {
                 anti_ice_fraction: 0.025,
@@ -556,8 +571,9 @@ impl EngineSpec {
         s.fadec.idle_n1_ground_pct = 20.0;
         s.fadec.idle_n1_flight_pct = 26.0;
         // Lower OPR: the same fuel flow is a larger fraction of burner pressure
-        s.fadec.accel_wf_p3_vs_n2c = vec![[50.0, 1.80], [60.0, 1.95], [70.0, 2.20], [80.0, 2.45], [90.0, 2.55], [100.0, 2.55], [105.0, 2.55]];
-        s.fadec.decel_wf_p3_vs_n2c = vec![[50.0, 1.15], [60.0, 1.20], [80.0, 1.28], [100.0, 1.31], [105.0, 1.31]];
+        s.fadec.accel_wf_p3_vs_n2c = vec![[50.0, 2.15], [60.0, 2.30], [70.0, 2.60], [80.0, 2.85], [90.0, 3.00], [100.0, 3.00], [105.0, 3.00]];
+        s.fadec.egt_transient_margin_c = 35.0; // EEC trims the accel fuel as EGT nears the limit
+        s.fadec.decel_wf_p3_vs_n2c = vec![[50.0, 0.98], [60.0, 1.03], [80.0, 1.12], [100.0, 1.18], [105.0, 1.18]]; // idle steady ~1.21
         s.start.min_light_n2_pct = 22.0;
         s.start.starter_cutout_n2_pct = 50.0;
         s.start.start_fuel_schedule = vec![[20.0, 0.020], [30.0, 0.030], [45.0, 0.065], [55.0, 0.110], [58.0, 0.150], [60.0, 0.155]];
@@ -575,6 +591,75 @@ impl EngineSpec {
             oil_pressure_caution_psi: 65.0,
             oil_temp_max_continuous_c: 155.0,
             oil_temp_max_transient_c: 165.0,
+            vib_advisory: 4.0,
+            takeoff_time_limit_s: 300.0,
+        };
+        s
+    }
+
+    /// Pratt & Whitney PW1127G-JM: 27,075 lbf takeoff thrust, Airbus A320neo.
+    ///
+    /// Geared turbofan: the LP turbine drives the fan through a 3.0625:1
+    /// reduction gearbox, so N1 (fan) runs around 3,000 rpm while the LPT
+    /// spins three times faster. Published figures (FAA TCDS E00087EN,
+    /// A320neo FCOM limitations, P&W data): rating, fan diameter, bypass
+    /// ratio, gear ratio, limits. Calibration knobs start from the LEAP-1B28.
+    pub fn pw1127g_jm() -> Self {
+        let mut s = Self::leap_1b28();
+        s.name = "PW1127G-JM".into();
+        s.manufacturer = "Pratt & Whitney".into();
+        s.application = "Airbus A320neo".into();
+        s.rating = Rating {
+            takeoff_thrust_n: 120_430.0,        // 27,075 lbf
+            max_continuous_thrust_n: 112_000.0, // ~25,200 lbf
+            flat_rating_delta_isa_k: 15.0,
+        };
+        s.geometry = Geometry {
+            fan_diameter_m: 2.057, // 81 in
+            length_m: 3.400,
+            dry_mass_kg: 2_857.0,  // 6,300 lb
+            fan_stages: 1,
+            booster_stages: 3,
+            hpc_stages: 8,
+            hpt_stages: 2,
+            lpt_stages: 3,
+        };
+        let d = &mut s.design_point;
+        d.n1_100pct_rpm = 3_281.0; // fan
+        d.n2_100pct_rpm = 22_300.0;
+        d.fan_gear_ratio = 3.0625;
+        d.mass_flow_kg_s = 540.0;
+        d.bypass_ratio = 12.5;
+        d.fan_pressure_ratio = 1.33; // low fan pressure ratio at takeoff, static
+        d.booster_pressure_ratio = 2.60;
+        d.hpc_pressure_ratio = 15.4; // OPR = 40
+        d.eta_fan = 0.93;
+        d.eta_lpt = 0.92; // fast, few-stage LPT
+        s.spools.n1_idle_pct = 17.0;
+        s.spools.n2_idle_pct = 60.0;
+        s.spools.n2_vs_n1 = vec![[0.0, 0.0], [17.0, 60.0], [35.0, 72.0], [50.0, 80.0], [70.0, 89.0], [85.0, 94.5], [100.0, 98.5], [104.0, 100.0], [110.0, 102.0]];
+        s.spools.lp_inertia_kg_m2 = 120.0; // large fan plus the LPT seen through the gear (x9.4)
+        s.spools.hp_inertia_kg_m2 = 2.2;
+        s.fadec.idle_n1_ground_pct = 17.0;
+        s.fadec.idle_n1_flight_pct = 23.0;
+        // Steady Wf/Ps3 at takeoff is only ~0.70 (kg/h)/kPa at OPR 40 with this fuel flow
+        s.fadec.accel_wf_p3_vs_n2c = vec![[50.0, 1.20], [60.0, 1.25], [70.0, 1.40], [80.0, 1.50], [90.0, 1.55], [100.0, 1.55], [120.0, 1.55]];
+        s.fadec.decel_wf_p3_vs_n2c = vec![[50.0, 0.40], [60.0, 0.43], [80.0, 0.50], [100.0, 0.55], [120.0, 0.55]]; // idle steady ~0.54
+        s.fadec.egt_transient_margin_c = 60.0;
+        s.start.start_fuel_schedule = vec![[22.0, 0.022], [30.0, 0.032], [45.0, 0.068], [55.0, 0.115], [60.0, 0.150], [62.0, 0.158]];
+        s.start.starter_cutout_n2_pct = 58.0;
+        s.start.motoring_n1_over_n2 = 0.04;
+        s.start.lit_n1_over_n2 = 0.30;
+        s.limits = Limits {
+            n1_max_pct: 100.0,
+            n2_max_pct: 100.0,
+            egt_takeoff_c: 1_083.0,
+            egt_max_continuous_c: 1_038.0,
+            egt_start_c: 870.0,
+            oil_pressure_min_psi: 36.0,
+            oil_pressure_caution_psi: 45.0,
+            oil_temp_max_continuous_c: 163.0,
+            oil_temp_max_transient_c: 177.0,
             vib_advisory: 4.0,
             takeoff_time_limit_s: 300.0,
         };

@@ -149,7 +149,7 @@ const turbofan: KindDef = {
       ["T4 actual / steady", `${s.t4_k.toFixed(0)} / ${s.t4_steady_k.toFixed(0)} K`, Math.abs(s.t4_k - s.t4_steady_k) > 50],
       ["EGT gas (true)", `${s.egt_gas_c.toFixed(0)} °C`],
       ["N1 / N2 corrected", `${s.n1_corrected_pct.toFixed(1)} / ${s.n2_corrected_pct.toFixed(1)} %`],
-      ["N1 / N2", `${s.n1_rpm.toFixed(0)} / ${s.n2_rpm.toFixed(0)} rpm`],
+      s.lpt_rpm > s.n1_rpm * 1.01 ? ["N1 fan / LPT / N2", `${s.n1_rpm.toFixed(0)} / ${s.lpt_rpm.toFixed(0)} / ${s.n2_rpm.toFixed(0)} rpm`] : ["N1 / N2", `${s.n1_rpm.toFixed(0)} / ${s.n2_rpm.toFixed(0)} rpm`],
       ["HPC / fan surge margin", `${s.hpc_surge_margin_pct.toFixed(1)} / ${s.fan_surge_margin_pct.toFixed(1)} %`, s.hpc_surge_margin_pct < 8],
       ["VBV / VSV", `${(s.vbv_open * 100).toFixed(0)} % open / ${s.vsv_angle_deg.toFixed(0)}°`],
       ["Customer bleed", `${(s.bleed_fraction * 100).toFixed(1)} % · ${fmtMassFlow(c.bleed_kg_s)}`],
@@ -432,6 +432,19 @@ const turboprop: KindDef = {
 };
 
 export const KINDS: Record<string, KindDef> = { turbofan, piston, turboprop };
+
+/** Lessons written for a specific preset, listed before the family's lessons. */
+export const PRESET_LESSONS: Record<string, [string, string][]> = {
+  leap1b: [["leap-01-ground-start.txt", "LEAP 01 Ground start"], ["leap-02-takeoff-accel.txt", "LEAP 02 Idle → takeoff acceleration"]],
+  v2500: [["v2500-01-ground-start.txt", "V2500 01 Ground start"], ["v2500-02-takeoff-accel.txt", "V2500 02 Idle → takeoff acceleration"]],
+  pw1100g: [["pw1100g-01-ground-start.txt", "GTF 01 Ground start"], ["pw1100g-02-takeoff-accel.txt", "GTF 02 Idle → takeoff acceleration"]],
+  o320: [["o320-01-cold-start.txt", "O-320 01 Cold start, run-up and mag check"], ["o320-02-takeoff-climb.txt", "O-320 02 Takeoff and climb"]],
+  pt6a42: [["pt6a42-01-start.txt", "PT6A-42 01 Ground start"], ["pt6a42-02-takeoff-torque-itt.txt", "PT6A-42 02 Takeoff: torque vs ITT"]],
+};
+
+export function lessonsFor(kind: KindDef, preset: string): [string, string][] {
+  return [...(PRESET_LESSONS[preset] ?? []), ...kind.lessons];
+}
 
 /** Descriptor for an engine kind; dial limits follow the spec's limits block. */
 export function kindDef(kind: string, spec?: AnySpec): KindDef {

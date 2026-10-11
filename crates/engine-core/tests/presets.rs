@@ -84,13 +84,97 @@ fn v2500_starts_and_accelerates_within_limits() {
     }
     let t95 = t95.expect("95% thrust");
     println!("V2527-A5 accel: 95% thrust in {t95:.1} s, EGT peak {peak:.0} C, min HPC surge margin {min_sm:.1} %");
-    // From ground idle (FAR 33.73 counts from flight idle): ~8-9 s with the
-    // Wf/Ps3 schedule that keeps the LPT-exit EGT overshoot within ~60 C of
-    // the limit. The EEC's transient EGT limiting is not modelled.
-    assert!((3.0..=9.0).contains(&t95), "idle to 95% thrust took {:.1} s", t95);
+    // From ground idle (FAR 33.73 counts from flight idle). The EEC's transient
+    // EGT limiting trims the accel fuel as the LPT-exit EGT nears the limit,
+    // which stretches the last second of the acceleration.
+    assert!((3.0..=9.5).contains(&t95), "idle to 95% thrust took {:.1} s", t95);
     let st = e.state();
     assert!(st.n1_pct <= s.limits.n1_max_pct + 0.5 && st.n2_pct <= s.limits.n2_max_pct + 0.5, "N1 {:.1} N2 {:.1}", st.n1_pct, st.n2_pct);
-    assert!(peak < s.limits.egt_takeoff_c + 60.0, "EGT overshoot to {:.0} C", peak);
+    assert!(peak < s.limits.egt_takeoff_c, "EGT overshoot to {:.0} C (limit {:.0})", peak, s.limits.egt_takeoff_c);
+    assert!(min_sm > 2.0 && st.surge_count == 0, "surge margin {:.1}%", min_sm);
+    assert!(st.warnings.is_empty(), "warnings: {:?}", st.warnings);
+}
+
+#[test]
+fn every_turbofan_preset_decelerates_to_idle() {
+    // Takeoff to idle: the decel floor must sit below the idle steady fuel or the
+    // engine hangs above idle. All turbofan presets should be back within 3 % N1
+    // of idle 20 s after the lever is closed.
+    for p in PRESETS.iter().filter(|p| p.1 == "turbofan") {
+        let AnySpec::Turbofan(spec) = AnySpec::default_for(p.0).unwrap() else { unreachable!() };
+        let mut e = Engine::new(spec.clone());
+        e.set_running(1.0);
+        for _ in 0..200 { e.step(0.05); }
+        e.controls.tla = 0.0;
+        for _ in 0..400 { e.step(0.05); }
+        let st = e.state();
+        assert!(st.n1_pct <= spec.spools.n1_idle_pct + 3.0, "{}: N1 {:.1} % still above idle {:.0} % 20 s after closing the lever", p.0, st.n1_pct, spec.spools.n1_idle_pct);
+    }
+}
+
+// ---------------------------------------------------------------- PW1127G-JM
+
+#[test]
+fn pw1100g_geared_fan_design_point_and_cruise() {
+    let s = EngineSpec::pw1127g_jm();
+    let d = size_design_point(&s);
+    let r = &d.takeoff;
+    assert!((r.net_thrust_n - s.rating.takeoff_thrust_n).abs() / s.rating.takeoff_thrust_n < 0.002);
+    assert!((r.bypass_ratio - 12.5).abs() < 0.15, "BPR {:.2}", r.bypass_ratio);
+    assert!((38.0..=42.0).contains(&r.overall_pressure_ratio), "OPR {:.1}", r.overall_pressure_ratio);
+    let tsfc = r.tsfc * 3600.0 * 9.80665;
+    assert!((0.22..=0.30).contains(&tsfc), "takeoff TSFC {:.3}", tsfc);
+    let egt_c = r.egt_k - 273.15;
+    assert!(egt_c < s.limits.egt_takeoff_c - 50.0 && egt_c > 800.0, "takeoff EGT {:.0} C", egt_c);
+    let cruise = tf_point(&s, 85.0, 10_668.0, 0.78);
+    let ctsfc = cruise.tsfc * 3600.0 * 9.80665;
+    let leap = tf_point(&EngineSpec::leap_1b28(), 85.0, 10_668.0, 0.78);
+    let ltsfc = leap.tsfc * 3600.0 * 9.80665;
+    assert!((0.46..=0.56).contains(&ctsfc), "cruise TSFC {:.3}", ctsfc);
+    assert!(ctsfc < ltsfc + 0.02, "GTF cruise TSFC {:.3} vs LEAP {:.3}", ctsfc, ltsfc);
+    // The gearbox: fan at N1, LP turbine 3.06 times faster
+    let mut e = Engine::new(s.clone());
+    e.set_running(1.0);
+    for _ in 0..200 { e.step(0.05); }
+    let st = e.state();
+    assert!((st.lpt_rpm / st.n1_rpm - 3.0625).abs() < 1e-6, "gear ratio {:.4}", st.lpt_rpm / st.n1_rpm);
+    assert!((st.n1_rpm - 3_281.0).abs() < 40.0, "fan rpm at takeoff {:.0}", st.n1_rpm);
+}
+
+#[test]
+fn pw1100g_starts_and_accelerates_within_limits() {
+    let s = EngineSpec::pw1127g_jm();
+    let mut e = Engine::new(s.clone());
+    e.controls.starter = true;
+    let (mut t, mut peak, mut fuel_on, mut running) = (0.0, 0.0f64, None, None);
+    while t < 150.0 {
+        let st = e.state();
+        if fuel_on.is_none() && st.n2_pct >= 25.0 { e.controls.fuel_lever = true; fuel_on = Some(t); }
+        if st.mode == Mode::Starting { peak = peak.max(st.egt_c); }
+        if st.mode == Mode::Running { running = Some(t); break; }
+        e.step(0.05); t += 0.05;
+    }
+    let (f, r) = (fuel_on.expect("motored"), running.expect("idle"));
+    assert!(r - f > 20.0 && r - f < 90.0, "start took {:.1} s", r - f);
+    assert!(peak > 300.0 && peak < s.limits.egt_start_c, "start EGT peak {:.0} C", peak);
+    let mut e = Engine::new(s.clone());
+    e.set_running(0.0);
+    for _ in 0..200 { e.step(0.05); }
+    let t0 = e.time();
+    e.controls.tla = 1.0;
+    let (mut t95, mut peak, mut min_sm) = (None, 0.0f64, 100.0f64);
+    while e.time() - t0 < 25.0 {
+        e.step(0.02);
+        let st = e.state();
+        peak = peak.max(st.egt_c); min_sm = min_sm.min(st.hpc_surge_margin_pct);
+        if t95.is_none() && st.thrust_n >= 0.95 * s.rating.takeoff_thrust_n { t95 = Some(e.time() - t0); }
+    }
+    let t95 = t95.expect("95% thrust");
+    println!("PW1127G-JM accel: 95% thrust in {t95:.1} s, EGT peak {peak:.0} C, min HPC surge margin {min_sm:.1} %");
+    // The big geared fan is slow to spin up: the GTF is known for a leisurely spool
+    assert!((3.0..=10.0).contains(&t95), "idle to 95% thrust took {:.1} s", t95);
+    let st = e.state();
+    assert!(peak < s.limits.egt_takeoff_c, "EGT overshoot to {:.0} C", peak);
     assert!(min_sm > 2.0 && st.surge_count == 0, "surge margin {:.1}%", min_sm);
     assert!(st.warnings.is_empty(), "warnings: {:?}", st.warnings);
 }
