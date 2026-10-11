@@ -1,0 +1,14 @@
+# V2527-A5 hot start: a rich start fuel schedule drives the LPT-exit EGT past
+# the 635 C start limit. Procedure: fuel lever to CUTOFF, keep motoring to cool.
+# Watch how little margin the V2500 has between a normal start peak and its limit.
+at 0    fault start_fuel_factor 1.8
+at 0    log on
+at 0    starter on
+at 18   note Fuel lever RUN: watch EGT rise toward the 635 C start limit
+at 18   fuel on
+when egt >= 635  note HOT START: EGT limit exceeded. Fuel lever CUTOFF, motor 30 s
+when egt >= 635  fuel off
+when egt >= 635  check egt >= 635
+at 60   check egt < 400
+at 90   starter off
+at 100  end

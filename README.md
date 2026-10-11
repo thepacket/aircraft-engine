@@ -9,7 +9,9 @@ An educational IDE for aircraft engine simulation. The simulators are
 physics-based models built from the published specifications of real
 engines, with virtual cockpit instrumentation and a data logger. Everything
 runs inside the browser: the web server only delivers static files, and the
-simulation core is Rust compiled to WebAssembly.
+simulation core is Rust compiled to WebAssembly. It is a progressive web
+app: after the first visit it works offline and can be installed from the
+browser like a desktop or tablet app.
 
 Three engine families and eight engines, each validated against its published
 data. Try it at
@@ -45,8 +47,9 @@ https://aircraftengine.fly.dev, no install needed.
 - Abnormals: hot, hung and wet starts, compressor surge and surge cycling,
   flameout and auto-relight, windmill restart envelope, oil leak to seizure,
   fire drill, governor failure, instrument failure; all through injectable
-  faults and 37 scripted lessons (15 turbofan, 6 piston, 6 turboprop, plus
-  two per newer preset with checkpoints tuned to that engine).
+  faults and 42 scripted lessons (15 turbofan, 6 piston, 6 turboprop, plus
+  two to four per newer preset, including hot starts, a surge and a
+  flameout, with checkpoints tuned to that engine).
 - Assessment: `check` and `watch` lines in a lesson script set pass/fail
   criteria on any signal (EGT under the start limit, idle N1 in range, 95 %
   thrust within the FAR 33.73 time) and the IDE reports the results. Every
@@ -97,7 +100,8 @@ aircraft-engine/
 │   ├── src/replay.ts       CSV flight-log import, mapping, replay and comparison
 │   ├── src/share.ts        Share links (compressed state in the URL fragment)
 │   ├── src/markdown.ts     Renders docs/MODEL.md into the Model tab
-│   └── public/scenarios/   Lesson scripts
+│   ├── public/scenarios/   Lesson scripts
+│   └── public/sw.js, manifest.webmanifest, icons/   Offline service worker and PWA manifest
 ├── docs/MODEL.md         Model documentation (equations, calibration, limits)
 ├── Dockerfile, fly.toml  Static-site deployment (nginx) on Fly.io
 └── scripts/build-wasm.sh
@@ -220,8 +224,10 @@ position in the browser:
   the space (one row of eight in a short panel, three columns in a tall
   one), in single and twin-engine layouts.
 
-Double-click a grip to return to the automatic layout. The Screenshot
-button on the glareshield saves a PNG of the whole flight deck, including
+Double-click a grip to return to the automatic layout. Below 1000 px the
+layout changes: on a tablet the display units take the full width with
+the pedestal and the charts side by side underneath; on a phone everything
+stacks in one column. The Screenshot button on the glareshield saves a PNG of the whole flight deck, including
 the part of the centre column scrolled out of view, named after the engine
 and the simulation time; it is rendered in the browser, so nothing leaves
 the machine.
@@ -254,7 +260,11 @@ cargo run -p engine-cli -- run web/public/scenarios/turboprop-01-start.txt --eng
 
 The simulation runs in a dedicated Web Worker (so it is not throttled in a
 background tab) and the UI renders 30 state snapshots per second. The server
-only serves static files; nothing about a session leaves the browser. Share
+only serves static files; nothing about a session leaves the browser. In
+production a service worker keeps every file it has served (app shell,
+wasm, lessons, model documentation) so the simulator keeps working
+offline; it is network-first, so a new deployment is picked up on the
+next online visit. Share
 links put the scenario, spec and settings into the URL fragment; edits are
 also kept in the browser's local storage.
 
@@ -328,6 +338,13 @@ two-stage-HPT cycle. Checked points: rated thrust 29,317 lbf by sizing;
 takeoff TSFC ~0.28 lb/lbf/h and EGT ~900 °C (limit 1,038 °C); cruise FL350
 M0.78 TSFC ~0.55, about 11 % below the CFM56-7B26 (published ~15 %); ground
 start and FAR 33.73 acceleration within limits.
+
+Known calibration gaps: the PW1127G-JM airflow (540 kg/s) is chosen so the
+sizing lands on the rating with a plausible turbine temperature, since
+P&W does not publish it; the V2527-A5 takes ~9 s from ground idle to 95 %
+thrust, about a second more than the real engine, because its EEC trims
+fuel as the LPT-exit EGT approaches the 635 °C limit and the model trades
+the last second of spool-up for staying under that limit.
 
 ## What is approximated
 

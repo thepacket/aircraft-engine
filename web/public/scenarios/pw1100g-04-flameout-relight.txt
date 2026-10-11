@@ -1,0 +1,20 @@
+# PW1127G-JM flameout at 15,000 ft, M0.5: the big geared fan windmills slowly
+# but the core stays above 20% N2 and the FADEC auto-relights. Then the same
+# at 35,000 ft, M0.78: no relight above 30,000 ft until descent.
+at 0    alt 4572
+at 0    mach 0.5
+at 0    running 0.5
+at 0    log on
+at 10   note Flameout at FL150: windmilling core, auto-relight
+at 10   fault flameout
+at 40   check n2 >= 40
+at 60   alt 10668
+at 60   mach 0.78
+at 60   tla 0.62
+at 90   note Flameout at FL350: above the relight envelope
+at 90   fault flameout
+at 125  check n2 < 45
+at 130  note Descend below 30,000 ft: relight
+at 130  alt 8500
+at 175  check n2 >= 55
+at 180  end

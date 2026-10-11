@@ -1,0 +1,14 @@
+# PW1127G-JM hot start: a very rich start fuel schedule (the GTF's high
+# cooling flow gives it a large start margin) drives EGT past the 870 C
+# start limit. Procedure: fuel lever to CUTOFF, keep motoring to cool.
+at 0    fault start_fuel_factor 2.6
+at 0    log on
+at 0    starter on
+at 18   note Fuel lever RUN: watch EGT rise toward the 870 C start limit
+at 18   fuel on
+when egt >= 870  note HOT START: EGT limit exceeded. Fuel lever CUTOFF, motor 30 s
+when egt >= 870  fuel off
+when egt >= 870  check egt >= 870
+at 85   check egt < 550
+at 90   starter off
+at 100  end

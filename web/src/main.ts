@@ -33,6 +33,11 @@ const lsDel = (k: string): void => { try { localStorage.removeItem(k); } catch {
 
 async function main(): Promise<void> {
   initSplitters();
+  // Offline use: the service worker caches the app shell and the wasm after the
+  // first visit (production builds only, so the dev server stays uncached).
+  if (import.meta.env.PROD && "serviceWorker" in navigator) {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((e) => console.warn("service worker not registered", e));
+  }
   // ---- Restore settings and share link -----------------------------------
   const shared = await decodeShare(location.hash);
   let engines = shared?.engines ?? (parseInt(lsGet(LS.engines) ?? "1", 10) || 1);
@@ -331,6 +336,8 @@ async function main(): Promise<void> {
 
   // ---- Scenario -----------------------------------------------------------
   const scenarioText = $<HTMLTextAreaElement>("scenario-text"), scenarioStatus = $("scenario-status"), presetSel = $<HTMLSelectElement>("scenario-preset");
+  /** True once the loaded lesson text has been edited (declared before loadPreset, which clears it) */
+  let lessonEdited = false;
   const loadPreset = async (file: string): Promise<void> => { const r = await fetch(`${import.meta.env.BASE_URL}scenarios/${file}`); scenarioText.value = await r.text(); lsSet(LS.scenario, scenarioText.value); lessonEdited = false; };
   const buildLessons = (): void => { presetSel.innerHTML = ""; for (const [file, label] of lessonsFor(kind, client.preset)) { const o = document.createElement("option"); o.value = file; o.textContent = label; presetSel.appendChild(o); } };
   buildLessons();
@@ -388,7 +395,6 @@ async function main(): Promise<void> {
     runner = null; btnRun.disabled = false; btnStop.disabled = true;
   };
   // ---- Results: graded lesson runs kept in this browser ----------------------
-  let lessonEdited = false;
   const lessonLabel = (): string => `${presetSel.selectedOptions[0]?.textContent ?? "Scenario"}${lessonEdited ? " (edited)" : ""}`;
   const loadRuns = (): LessonRun[] => { try { return JSON.parse(lsGet(LS.runs) ?? "[]") as LessonRun[]; } catch { return []; } };
   let runs: LessonRun[] = loadRuns();

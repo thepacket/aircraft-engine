@@ -1,0 +1,13 @@
+# LEAP-1B28 hot start: a rich start fuel schedule drives EGT past the 750 C
+# start limit. Procedure: fuel lever to CUTOFF, keep motoring to cool.
+at 0    fault start_fuel_factor 1.8
+at 0    log on
+at 0    starter on
+at 18   note Fuel lever RUN: watch EGT rise toward the 750 C start limit
+at 18   fuel on
+when egt >= 750  note HOT START: EGT limit exceeded. Fuel lever CUTOFF, motor 30 s
+when egt >= 750  fuel off
+when egt >= 750  check egt >= 750
+at 60   check egt < 500
+at 90   starter off
+at 100  end

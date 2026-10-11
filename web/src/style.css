@@ -275,10 +275,22 @@ table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); 
 @media (max-width: 1300px) {
   #app { grid-template-columns: 300px 1fr var(--right-w); }
 }
-@media (max-width: 1000px) {
-  #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "top" "center" "left" "right"; height: auto; }
+/* Tablet: display units full width on top, pedestal and charts side by side below */
+@media (max-width: 1000px) and (min-width: 700px) {
+  #app { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; grid-template-areas: "top top" "center center" "left right"; height: auto; }
+  #center { overflow: visible; }
+  #right .charts .chart canvas { min-height: 120px; }
   #splitter, #hsplitter { display: none; }
   .eicas { height: auto; }
+  .eicas-sized .dial svg, .eicas-sized .twin .dial svg { max-width: 200px; }
+}
+/* Phone: a single column */
+@media (max-width: 699px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "top" "center" "left" "right"; height: auto; }
+  #center { overflow: visible; }
+  #splitter, #hsplitter { display: none; }
+  .eicas { height: auto; }
+  .eicas-sized .dial svg, .eicas-sized .twin .dial svg { max-width: 200px; }
   #eicas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

@@ -1,0 +1,33 @@
+# V2527-A5 compressor surge: a damaged HPC (10 points of margin lost) surges on
+# a slam acceleration. Watch the surge margin readout, the EGT spike, the
+# thrust loss and the EEC recovery. Second half: a gentle lever advance does not surge.
+at 0    fault compressor_damage_pct 10
+at 0    running 0
+at 0    log on
+at 5    note Slam acceleration with a damaged compressor
+at 5    tla 1.0
+when sm_hpc < 0  note SURGE: fuel to the decel floor, accel schedule re-armed
+at 25   tla 0
+at 45   note Same engine, lever advanced gently: no surge
+at 45   watch sm_hpc > 0
+at 47   tla 0.05
+at 50   tla 0.10
+at 53   tla 0.15
+at 56   tla 0.20
+at 59   tla 0.25
+at 62   tla 0.30
+at 65   tla 0.35
+at 68   tla 0.40
+at 71   tla 0.45
+at 74   tla 0.50
+at 77   tla 0.55
+at 80   tla 0.60
+at 83   tla 0.65
+at 86   tla 0.70
+at 89   tla 0.75
+at 92   tla 0.80
+at 95   tla 0.85
+at 98   tla 0.90
+at 101  tla 0.95
+at 104  tla 1.00
+at 120  end
