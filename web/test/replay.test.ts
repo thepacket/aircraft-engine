@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { initSync, Simulator } from "../src/wasm/engine_wasm.js";
-import { parseCsv, autoMap, suffixUnit, Replay } from "../src/replay";
+import { parseCsv, autoMap, suffixUnit, measuredSignals, Replay } from "../src/replay";
 import { setActiveSignals, signal } from "../src/signals";
 import { kindDef } from "../src/kinds";
 import { speedOfSound } from "../src/units";
@@ -46,6 +46,11 @@ for (const kind of ["turbofan", "piston", "turboprop", "turbojet", "turboshaft"]
       checked++;
     }
     assert.ok(checked >= 5, `${kind}: only ${checked} signals round-tripped`);
+    // Every importable signal whose native column is in the log must be mapped
+    for (const sg of measuredSignals()) {
+      const native = table.columns.find((c) => sg.patterns![0].test(c));
+      if (native) assert.equal(map.columns[sg.key], native, `${kind}: native column ${native} for ${sg.key} not mapped (${map.notes[sg.key] ?? "no note"})`);
+    }
     assert.ok(s.measured.thrust === undefined || Math.abs(s.measured.thrust) < 200, `${kind}: thrust ${s.measured.thrust} kN looks like newtons`);
   });
 }

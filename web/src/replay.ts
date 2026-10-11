@@ -100,7 +100,8 @@ export function autoMap(columns: string[]): Mapping {
   }
   const used = new Set(Object.values(m.columns));
   for (const s of measuredSignals()) {
-    const opts = s.importUnits ?? [];
+    // Without an explicit import list the signal's own unit is the one it takes
+    const opts = s.importUnits ?? [{ label: s.unitSi, toSi: (v: number) => v }];
     // Candidates in pattern order; a column whose unit suffix is one this
     // signal can import wins (so `torque_pct` beats `torque_ftlb` for a
     // percent torque), then the first match without a conflicting suffix.
