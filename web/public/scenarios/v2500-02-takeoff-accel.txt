@@ -1,0 +1,13 @@
+# V2527-A5: idle to takeoff thrust (26,500 lbf = 118 kN). EGT limit 635 C
+# at the LPT exit; the EEC trims the acceleration fuel as EGT nears it,
+# which is why the last second of the spool-up is slow.
+at 0    running 0
+at 0    log on
+at 5    note Thrust lever to TO/GA
+at 5    tla 1.0
+at 5    watch egt < 635
+at 16   check thrust >= 112
+at 30   note Back to idle (decel schedule)
+at 30   tla 0
+at 45   check n1 <= 22
+at 50   end

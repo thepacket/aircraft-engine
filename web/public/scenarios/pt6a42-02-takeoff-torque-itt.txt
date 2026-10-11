@@ -1,0 +1,19 @@
+# PT6A-42 takeoff power: at sea level the engine is torque limited
+# (2,230 ft lb at 2,000 rpm) before ITT (800 C). Hot and high the same lever
+# gives less torque and ITT becomes the limit.
+at 0    ctl prop_lever 1
+at 0    running 0
+at 0    log on
+at 5    note Sea level ISA: power lever to max, torque ~2,200 ft lb
+at 5    ctl power_lever 1
+at 5    watch itt < 800
+at 20   check torque >= 2000
+at 20   check np >= 1950
+at 25   ctl power_lever 0
+at 40   note Same at 2,000 m, ISA+25: ITT limited, torque down
+at 40   alt 2000
+at 40   isa 25
+at 45   ctl power_lever 1
+at 60   check torque <= 2100
+at 65   ctl power_lever 0
+at 80   end

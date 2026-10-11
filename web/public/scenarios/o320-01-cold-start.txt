@@ -1,0 +1,27 @@
+# Lycoming O-320-E2D cold start and run-up (Cessna 172N checklist order).
+# Watch: cranking ~170 rpm, fire within a few seconds when primed, oil
+# pressure within 30 s, then the 1,700 rpm run-up and the magneto check.
+at 0    log on
+at 0    note Mixture rich, 3 primer shots, magnetos BOTH
+at 0    ctl mixture 1
+at 2    ctl primer 3
+at 4    ctl magnetos 3
+at 6    note Crank
+at 6    ctl starter on
+when rpm >= 500  ctl starter off
+when rpm >= 500  note Running: oil pressure must show within 30 s
+at 20   ctl throttle 0.2
+at 20   note Warm up at ~1,000 rpm until oil temp is in the green
+at 50   check oilp >= 25
+at 120  speed 5
+at 300  speed 1
+at 300  note Run-up: 1,700 rpm, mags L and R (drop 125 rpm max, 50 rpm difference)
+at 300  ctl throttle 0.45
+at 300  check oilt >= 60
+at 315  check rpm >= 1600
+at 318  ctl magnetos 1
+at 326  ctl magnetos 3
+at 330  ctl magnetos 2
+at 338  ctl magnetos 3
+at 345  ctl throttle 0
+at 360  end

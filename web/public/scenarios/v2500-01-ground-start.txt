@@ -1,0 +1,14 @@
+# V2527-A5 ground start (A320), sea level ISA. The V2500 reads EGT at the
+# LPT exit: the start limit is 635 C and idle EGT is only ~420 C.
+at 0    note Ground start: starter on
+at 0    log on
+at 0    starter on
+at 18   note Fuel lever to RUN at ~25% N2
+at 18   fuel on
+at 18   watch egt < 635
+at 75   starter off
+at 90   note Stabilised at ground idle: N1 ~20%, N2 ~58%
+at 90   check n1 >= 19
+at 90   check n1 <= 22
+at 90   check n2 >= 56
+at 100  end

@@ -1,0 +1,15 @@
+# PW1127G-JM geared turbofan (A320neo) ground start, sea level ISA. The fan
+# (N1) turns at ~3,000 rpm; the LP turbine three times faster through the
+# gearbox. Start EGT limit 870 C, idle N1 17% / N2 60%.
+at 0    note Ground start: starter on
+at 0    log on
+at 0    starter on
+at 18   note Fuel lever to RUN at ~25% N2
+at 18   fuel on
+at 18   watch egt < 870
+at 75   starter off
+at 90   note Stabilised at ground idle: see N1 fan / LPT rpm in the readouts
+at 90   check n1 >= 16
+at 90   check n1 <= 19
+at 90   check n2 >= 58
+at 100  end

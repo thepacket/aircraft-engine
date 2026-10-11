@@ -1,0 +1,12 @@
+# LEAP-1B28: idle to takeoff thrust (29,317 lbf = 130 kN). EGT limit 1,038 C.
+# The high-pressure core keeps Wf/Ps3 low; watch the EGT margin.
+at 0    running 0
+at 0    log on
+at 5    note Thrust lever to TO/GA
+at 5    tla 1.0
+at 5    watch egt < 1038
+at 14   check thrust >= 124
+at 30   note Back to idle (decel schedule)
+at 30   tla 0
+at 45   check n1 <= 21
+at 50   end
