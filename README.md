@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Live](https://img.shields.io/badge/live-aircraftengine.fly.dev-4fc3f7.svg)](https://aircraftengine.fly.dev)
 
-![Aircraft Engine Sim running the CFM56-7B26: controls, 737NG-style engine indications, performance readouts, cycle stations and strip charts](docs/aircraft-engine.png)
+![Aircraft Engine Simulator running the CFM56-7B26 at cruise in its 737 flight-deck theme: pedestal controls, the scenario CDU with the running line highlighted, 737NG-style engine indications, performance readouts and strip charts](docs/aircraft-engine.png)
 
 An educational IDE for aircraft engine simulation. The simulators are
 physics-based models built from the published specifications of real
@@ -74,7 +74,8 @@ aircraft-engine/
 │   ├── src/sim.ts          Main-thread client for the worker
 │   ├── src/kinds.ts        Per-engine descriptors: dials, controls, faults, signals, readouts, lessons
 │   ├── src/signals.ts      Signal registry (chart channels, log import patterns and units)
-│   ├── src/instruments.ts  Round-dial SVG instruments
+│   ├── src/instruments.ts  Round-dial SVG instruments and the adaptive dial grid
+│   ├── src/splitter.ts     Draggable splitters (charts column width, indications height)
 │   ├── src/charts.ts       Strip charts with cursor and log overlay
 │   ├── src/scenario.ts     Scenario script parser and runner (timed and conditional lines)
 │   ├── src/replay.ts       CSV flight-log import, mapping, replay and comparison
@@ -173,6 +174,36 @@ at 2     ctl primer 3
 at 0     ctl prop_lever 1
 when ng >= 13   ctl condition_lever 1
 ```
+
+### The IDE
+
+The interface is laid out like a Boeing 737-800 flight deck. The top bar is
+the glareshield, with the engine state and simulation time in LCD-style
+windows and the engine, count, units and speed selectors. The left column
+is the pedestal: lit pushbuttons for the switches (starter, fuel lever,
+reverser, anti-ice, bleed, magnetos...), the thrust lever on a quadrant
+track, and the environment inputs. Below it a CDU holds the scenario
+editor, the spec editor, the fault panel, log replay, the model
+documentation and the help. The centre and right columns are display
+units: engine indications (round EICAS-style dials with white fill arc,
+boxed digital readout, amber band, red line and magenta command bug),
+performance readouts, cycle stations, the data logger and strip charts.
+
+Two splitters let you rearrange the layout, and both remember their
+position in the browser:
+
+- the grip in the gap left of the strip charts sets the width of the
+  right column;
+- the grip under the engine indications sets their height; the dials then
+  rearrange into whatever column count gives the largest instruments for
+  the space (one row of eight in a short panel, three columns in a tall
+  one), in single and twin-engine layouts.
+
+Double-click a grip to return to the automatic layout.
+
+While a scenario runs, the editor highlights the line of the last event
+applied in white and the conditional `when` lines that are armed and
+waiting in amber, and scrolls to keep the current line in view.
 
 Native tools without a browser:
 

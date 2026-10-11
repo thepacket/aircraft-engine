@@ -137,6 +137,8 @@ at 200   end</pre>
               <p>Commands: <code>engine 1|2|all</code>, <code>ctl &lt;control&gt; &lt;value&gt;</code> (any control of the engine: tla, mixture, magnetos, power_lever, prop_lever, condition_lever, carb_heat…), <code>starter</code>, <code>fuel on|off</code> (fuel lever / mixture / condition lever), <code>tla x</code> (main lever), <code>n1 pct|off</code>, <code>alt m</code>, <code>mach x</code>, <code>isa dK</code>, <code>humidity x</code>, <code>running level</code>, <code>antiice</code>, <code>pack</code>, <code>reverser</code>, <code>fault name [value]</code>, <code>bottle</code>, <code>log on|off</code>, <code>speed x</code>, <code>note text</code>, <code>end</code>.</p>
               <h3>Faults</h3>
               <p>starter_inop, starter_weak, starter_early_cutout, ignition_fail, start_fuel_factor (1 = normal), fuel_pump_fail, oil_leak_qt_per_min, fire, n1_governor_fail, compressor_damage_pct, fod, egt_probe_fail, reverser_stuck; one-shots: surge, flameout, fire_bottle.</p>
+              <h3>Layout</h3>
+              <p>Drag the grip left of the strip charts to resize the charts column, and the grip under the engine indications to resize them: the dials rearrange to make the most of the space. Double-click a grip to go back to the automatic layout. Both positions are remembered in this browser. While a scenario runs, the editor shows the current line in white and armed <code>when</code> lines in amber.</p>
               <h3>Replay</h3>
               <p>Load a CSV flight log, map its columns, and the simulator is driven by the logged levers (or follows the logged N1). Logged channels are overlaid on the charts as dashed lines and the errors are tabulated.</p>
               <h3>Use</h3>
