@@ -2,7 +2,7 @@
 import type { AnySpec, AnyState, EngineTarget } from "./types";
 
 type StateListener = (states: AnyState[]) => void;
-export interface SweepPoint { level: number; alt: number; mach: number; disa: number; humidity: number }
+export interface SweepPoint { level: number; /** turbofans: hold this N1 (%) instead of the lever */ n1?: number; alt: number; mach: number; disa: number; humidity: number }
 type DesignSizing = Record<string, unknown>;
 type EngineSpec = AnySpec;
 type EngineState = AnyState;

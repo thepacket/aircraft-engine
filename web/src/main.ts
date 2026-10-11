@@ -208,7 +208,7 @@ async function main(): Promise<void> {
   $("btn-cold").addEventListener("click", () => { client.reset(); setN1Hold(false, NaN, "all"); charts.forEach((c) => c.clear()); });
 
   // ---- Parametric sweeps ----------------------------------------------------
-  const sweep = initSweep({ client, current: () => { const st = focusState(); return { ...env, level: st ? Number(st.controls[kind.mainLever]) || 0 : 0 }; } });
+  const sweep = initSweep({ client, current: () => { const st = focusState(); return { ...env, level: st ? Number(st.controls[kind.mainLever]) || 0 : 0 }; }, hasN1: () => kind.kind === "turbofan" });
 
   // ---- Topbar -------------------------------------------------------------
   let paused = false;

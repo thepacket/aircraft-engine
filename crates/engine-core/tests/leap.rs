@@ -121,9 +121,13 @@ fn idle_to_takeoff_acceleration_meets_far_33_73() {
 fn steady_state_helper_matches_the_running_engine() {
     use engine_core::{AnyEngine, AnySpec};
     let e = AnyEngine::new(AnySpec::default_for("leap1b").unwrap());
-    let json = e.steady_state_json(1.0, 0.0, 0.0, 0.0, 0.4, 30.0);
+    let json = e.steady_state_json(1.0, -1.0, 0.0, 0.0, 0.0, 0.4, 30.0);
     let v: serde_json::Value = serde_json::from_str(&json).unwrap();
     let thrust = v["thrust_n"].as_f64().unwrap();
     assert!((thrust - spec().rating.takeoff_thrust_n).abs() / spec().rating.takeoff_thrust_n < 0.02, "steady takeoff thrust {:.0} N", thrust);
     assert_eq!(e.time(), 0.0, "the original engine must be untouched");
+    // Holding N1 instead of the lever
+    let held: serde_json::Value = serde_json::from_str(&e.steady_state_json(0.0, 85.0, 0.0, 0.0, 0.0, 0.4, 30.0)).unwrap();
+    let n1 = held["n1_pct"].as_f64().unwrap();
+    assert!((n1 - 85.0).abs() < 0.5, "held N1 {:.1}", n1);
 }

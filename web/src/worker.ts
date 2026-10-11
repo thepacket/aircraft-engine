@@ -14,7 +14,7 @@ type Msg =
   | { type: "kind"; kind: string; id: number }
   | { type: "csv"; engine: number; id: number }
   | { type: "faults"; target: number | "all"; patch: Record<string, unknown> | null }
-  | { type: "sweep"; id: number; points: { level: number; alt: number; mach: number; disa: number; humidity: number }[]; settle: number };
+  | { type: "sweep"; id: number; points: { level: number; n1?: number; alt: number; mach: number; disa: number; humidity: number }[]; settle: number };
 
 let sims: Simulator[] = [];
 let speed = 1;
@@ -109,10 +109,21 @@ self.onmessage = async (ev: MessageEvent<Msg>) => {
         break;
       }
       case "sweep": {
-        // Steady-state points on a copy of engine 1; the running engines are untouched
-        const s = sims[0];
-        const states = m.points.map((p) => s.steady_state_json(p.level, p.alt, p.mach, p.disa, p.humidity, m.settle));
-        (self as unknown as Worker).postMessage({ type: "sweep", id: m.id, states });
+        // Steady-state points on a copy of engine 1; the running engines are
+        // untouched. Computed in ~25 ms slices so the clock keeps ticking.
+        const states: string[] = [];
+        let i = 0;
+        const slice = (): void => {
+          const s = sims[0];
+          const t0 = performance.now();
+          while (i < m.points.length && performance.now() - t0 < 25) {
+            const p = m.points[i++];
+            states.push(s.steady_state_json(p.level, p.n1 ?? -1, p.alt, p.mach, p.disa, p.humidity, m.settle));
+          }
+          if (i < m.points.length) setTimeout(slice, 0);
+          else (self as unknown as Worker).postMessage({ type: "sweep", id: m.id, states });
+        };
+        slice();
         break;
       }
       case "faults": {

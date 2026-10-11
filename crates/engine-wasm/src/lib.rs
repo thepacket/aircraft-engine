@@ -90,8 +90,8 @@ impl Simulator {
     }
 
     /// Steady-state point for parametric sweeps (see `AnyEngine::steady_state_json`).
-    pub fn steady_state_json(&self, level: f64, altitude_m: f64, mach: f64, delta_isa_k: f64, humidity: f64, settle_s: f64) -> String {
-        self.engine.steady_state_json(level, altitude_m, mach, delta_isa_k, humidity, settle_s)
+    pub fn steady_state_json(&self, level: f64, n1_pct: f64, altitude_m: f64, mach: f64, delta_isa_k: f64, humidity: f64, settle_s: f64) -> String {
+        self.engine.steady_state_json(level, n1_pct, altitude_m, mach, delta_isa_k, humidity, settle_s)
     }
 
     pub fn step(&mut self, dt: f64) {

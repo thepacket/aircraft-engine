@@ -130,13 +130,17 @@ impl AnyEngine {
     /// Steady-state operating point for parametric sweeps: a copy of this
     /// engine is reset, placed running at `level` in the given environment
     /// and stepped for `settle_s` seconds; its state JSON is returned. The
-    /// running engine is untouched.
-    pub fn steady_state_json(&self, level: f64, altitude_m: f64, mach: f64, delta_isa_k: f64, humidity: f64, settle_s: f64) -> String {
+    /// running engine is untouched. A non-negative `n1_pct` holds that N1
+    /// instead of the lever (turbofans only; ignored otherwise).
+    pub fn steady_state_json(&self, level: f64, n1_pct: f64, altitude_m: f64, mach: f64, delta_isa_k: f64, humidity: f64, settle_s: f64) -> String {
         let mut e = self.clone();
         e.reset();
         e.clear_faults();
         e.set_environment(altitude_m, mach, delta_isa_k, humidity);
         e.set_running(level);
+        if n1_pct >= 0.0 && matches!(e, AnyEngine::Turbofan(_)) {
+            let _ = e.set_control("n1_demand", n1_pct);
+        }
         let dt = 0.05;
         let n = (settle_s.max(0.0) / dt).round() as usize;
         for _ in 0..n {

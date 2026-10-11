@@ -6,7 +6,7 @@ import { activeSignals, signal, type Signal } from "./signals";
 import type { AnyState } from "./types";
 import { unitSystem, FT } from "./units";
 
-type Var = "alt" | "mach" | "disa" | "level";
+type Var = "alt" | "mach" | "disa" | "level" | "n1";
 interface VarDef { key: Var; label: () => string; toSi: (v: number) => number; fromSi: (v: number) => number; def: () => [number, number]; seriesDef: () => string; decimals: number }
 
 const VARS: VarDef[] = [
@@ -14,6 +14,7 @@ const VARS: VarDef[] = [
   { key: "mach", label: () => "Mach", toSi: (v) => v, fromSi: (v) => v, def: () => [0, 0.85], seriesDef: () => "0, 0.3, 0.6, 0.8", decimals: 2 },
   { key: "disa", label: () => "ΔISA (°C)", toSi: (v) => v, fromSi: (v) => v, def: () => [-30, 40], seriesDef: () => "-20, 0, 15, 30", decimals: 0 },
   { key: "level", label: () => "Lever (%)", toSi: (v) => v / 100, fromSi: (v) => v * 100, def: () => [0, 100], seriesDef: () => "30, 60, 80, 100", decimals: 0 },
+  { key: "n1", label: () => "N1 (%)", toSi: (v) => v, fromSi: (v) => v, def: () => [25, 100], seriesDef: () => "60, 80, 95", decimals: 0 },
 ];
 const COLORS = ["#19d3f5", "#ff4fd8", "#39d353", "#ffb300", "#f4f7fa", "#b388ff"];
 
@@ -21,6 +22,8 @@ export interface SweepContext {
   client: SimClient;
   /** Current environment (SI) and main lever position, used for the variables not swept */
   current: () => { alt: number; mach: number; disa: number; humidity: number; level: number };
+  /** Whether the active engine can hold N1 directly (turbofans) */
+  hasN1: () => boolean;
 }
 
 export function initSweep(ctx: SweepContext): { rebuild: () => void } {
@@ -34,12 +37,13 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
 
   let result: { x: VarDef; y: Signal; s: VarDef | null; xs: number[]; series: { label: string; ys: number[] }[]; fixed: string } | null = null;
 
+  const vars = (): VarDef[] => VARS.filter((v) => v.key !== "n1" || ctx.hasN1());
   const fillVars = (): void => {
     for (const sel of [xSel, sSel]) {
       const keep = sel.value;
       sel.innerHTML = sel === sSel ? `<option value="">none</option>` : "";
-      for (const v of VARS) { const o = document.createElement("option"); o.value = v.key; o.textContent = v.label(); sel.appendChild(o); }
-      sel.value = keep || (sel === xSel ? "alt" : "");
+      for (const v of vars()) { const o = document.createElement("option"); o.value = v.key; o.textContent = v.label(); sel.appendChild(o); }
+      sel.value = vars().some((v) => v.key === keep) ? keep : sel === xSel ? "alt" : "";
     }
   };
   const rebuild = (): void => {
@@ -66,20 +70,22 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
     const sv = s ? sVals.value.split(/[,\s]+/).map(parseFloat).filter(Number.isFinite).slice(0, 6) : [NaN];
     if (s && !sv.length) { status.textContent = "Enter series values, e.g. 0, 3000, 6000."; return; }
     const cur = ctx.current();
-    const base = { alt: cur.alt, mach: cur.mach, disa: cur.disa, humidity: cur.humidity, level: cur.level };
+    // N1 is held only when it is swept or used as the series; otherwise the lever applies
+    const base: SweepPoint = { alt: cur.alt, mach: cur.mach, disa: cur.disa, humidity: cur.humidity, level: cur.level, n1: -1 };
     const points: SweepPoint[] = [];
     for (const v of sv) for (const xv of xs) {
-      const p = { ...base };
-      (p as Record<string, number>)[x.key] = x.toSi(xv);
-      if (s) (p as Record<string, number>)[s.key] = s.toSi(v);
-      points.push(p);
+      const p = { ...base } as unknown as Record<string, number>;
+      p[x.key] = x.toSi(xv);
+      if (s) p[s.key] = s.toSi(v);
+      points.push(p as unknown as SweepPoint);
     }
     btnRun.disabled = true; status.textContent = `Computing ${points.length} steady-state points…`;
     try {
       const states: AnyState[] = await ctx.client.sweep(points);
       const conv = (v: number): number => (unitSystem() === "si" ? v : y.toImp(v));
       const series = sv.map((v, k) => ({ label: s ? `${s.label().replace(/ \(.*\)$/, "")} ${v}` : y.label, ys: xs.map((_, i) => conv(y.get(states[k * n + i]))) }));
-      const fixedParts = VARS.filter((v) => v.key !== x.key && v.key !== s?.key).map((v) => `${v.label()} ${v.fromSi((base as Record<string, number>)[v.key]).toFixed(v.decimals)}`);
+      const usesN1 = x.key === "n1" || s?.key === "n1";
+      const fixedParts = vars().filter((v) => v.key !== x.key && v.key !== s?.key && v.key !== "n1" && (v.key !== "level" || !usesN1)).map((v) => `${v.label()} ${v.fromSi((base as unknown as Record<string, number>)[v.key]).toFixed(v.decimals)}`);
       result = { x, y, s, xs, series, fixed: fixedParts.join(" · ") };
       status.textContent = `${points.length} points, others held at ${result.fixed}.`;
       draw();
