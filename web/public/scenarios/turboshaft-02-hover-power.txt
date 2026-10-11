@@ -18,4 +18,6 @@ at 40   check torque >= 95
 at 45   note Lower to hover
 at 45   ctl collective 0.55
 at 60   check nr <= 104
+at 60   check torque <= 90
+at 60   check torque >= 50
 at 65   end

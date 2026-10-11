@@ -15,6 +15,8 @@ at 40   mach 0.78
 at 45   note Cruise: set N1 ~ 85%
 at 45   tla 0.62
 at 88   note Thrust at cruise is a quarter of the takeoff value for a fan speed still above 60 %
+at 88   check alt >= 10000
+at 88   check mach >= 0.75
 at 88   check thrust_pct < 25
 at 88   check n1 >= 60
 at 88   check egt_margin > 0

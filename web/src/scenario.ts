@@ -136,7 +136,8 @@ export class ScenarioRunner {
   currentLine = 0;
   /** Checkpoint results in the order they were opened */
   results: CheckResult[] = [];
-  private watches: { result: CheckResult; cond: Condition; worst: number; worstT: number }[] = [];
+  /** Open watches keep the engine they were opened on, whatever the script selects later */
+  private watches: { result: CheckResult; cond: Condition; worst: number; worstT: number; target: number | "all" }[] = [];
 
   /** Engine the script is currently addressing (`engine 2` -> 1); checks and watches read this engine */
   target: number | "all" = "all";
@@ -204,7 +205,7 @@ export class ScenarioRunner {
   /** Watches: record the first violation and the worst value seen */
   private evalWatches(rel: number): void {
     for (const w of this.watches) {
-      const v = this.read(w.cond.signal);
+      const v = this.readSignal(w.cond.signal, w.target);
       if (!Number.isFinite(v)) continue;
       const bad = !test(w.cond.op, v, w.cond.value);
       const worse = w.worst === undefined || Number.isNaN(w.worst) || (/[<]/.test(w.cond.op) ? v > w.worst : /[>]/.test(w.cond.op) ? v < w.worst : Math.abs(v - w.cond.value) > Math.abs(w.worst - w.cond.value));
@@ -250,7 +251,7 @@ export class ScenarioRunner {
         const c = parseCondition(e.arg)!;
         const result: CheckResult = { line: e.line, kind: "watch", text: e.arg, pass: null, detail: "" };
         this.results.push(result);
-        this.watches.push({ result, cond: c, worst: NaN, worstT: 0 });
+        this.watches.push({ result, cond: c, worst: NaN, worstT: 0, target: this.target });
         break;
       }
       // The ending tick still counts for the watches, so a limit busted on the

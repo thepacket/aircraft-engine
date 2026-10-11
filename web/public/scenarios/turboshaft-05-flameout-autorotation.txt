@@ -18,4 +18,6 @@ when ng >= 58   ctl throttle_twist 2
 at 75   check ng >= 60
 at 80   ctl collective 0.5
 at 100  check nr >= 96
+at 100  check torque >= 40
+at 100  check collective >= 0.4
 at 105  end

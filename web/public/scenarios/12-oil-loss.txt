@@ -12,4 +12,5 @@ when oilp < 13  check oilq < 6
 when oilp < 13  fuel off
 at 598  check ff < 0.001
 at 598  check n2 < 50
+at 598  check seized < 0.5
 at 600  end

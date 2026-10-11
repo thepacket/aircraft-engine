@@ -15,7 +15,11 @@ at 90   alt 1500
 at 120  alt 1524
 at 120  note 5,000 ft: full throttle gives only ~24.5 inHg. Lean to best power
 at 120  speed 1
+at 123  check ff_gph >= 10.4
 at 125  ctl mixture 0.6
+at 138  note Leaned at the same altitude and speed: 2 gph less for a little more power
+at 138  check ff_gph <= 10.0
+at 138  check power_pct >= 70.5
 at 140  mach 0.17
 at 118  check alt >= 1500
 at 118  check map < 25.5
