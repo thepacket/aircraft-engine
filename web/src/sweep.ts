@@ -26,7 +26,8 @@ export interface SweepContext {
   hasN1: () => boolean;
 }
 
-/** One-click studies: fill the fields in; kinds restricts the recipe to engine kinds */
+/** One-click studies: fill the fields in; kinds restricts the recipe to engine kinds.
+ *  from / to / sv are in SI (metres, Mach, K, lever 0..1 as %, N1 %) and are shown in the display unit. */
 interface Recipe { label: string; x: Var; y: string; s?: Var; sv?: string; from?: number; to?: number; kinds?: string[]; hint?: string }
 const RECIPES: Recipe[] = [
   { label: "Thrust lapse", x: "alt", y: "thrust", s: "mach", sv: "0, 0.4, 0.78", hint: "set the lever first (e.g. Climb)" },
@@ -40,9 +41,9 @@ const RECIPES: Recipe[] = [
   { label: "ITT vs ΔISA", x: "disa", y: "itt", from: -30, to: 40, kinds: ["turboprop"], hint: "max power lever" },
   { label: "Fuel flow vs lever", x: "level", y: "ff", s: "alt" },
   { label: "Thrust vs Mach", x: "mach", y: "thrust", s: "alt", sv: "0, 5000, 10000", kinds: ["turbojet"], hint: "throttle at MIL (1.0) or MAX A/B (1.3)" },
-  { label: "TSFC vs Mach (jet)", x: "mach", y: "tsfc", s: "level", sv: "80, 100, 130", kinds: ["turbojet"] },
-  { label: "Nozzle vs throttle", x: "level", y: "nozzle", from: 0, to: 130, kinds: ["turbojet"] },
-  { label: "EGT vs throttle", x: "level", y: "egt", from: 0, to: 130, s: "alt", kinds: ["turbojet"] },
+  { label: "TSFC vs Mach (jet)", x: "mach", y: "tsfc", s: "level", sv: "0.8, 1.0, 1.3", kinds: ["turbojet"] },
+  { label: "Nozzle vs throttle", x: "level", y: "nozzle", from: 0, to: 1.3, kinds: ["turbojet"] },
+  { label: "EGT vs throttle", x: "level", y: "egt", from: 0, to: 1.3, s: "alt", kinds: ["turbojet"] },
   { label: "Torque vs collective", x: "level", y: "torque", s: "alt", sv: "0, 1500, 3000", kinds: ["turboshaft"] },
   { label: "TOT vs collective", x: "level", y: "tot", s: "disa", sv: "-20, 0, 20, 35", kinds: ["turboshaft"] },
   { label: "Power vs ΔISA", x: "disa", y: "shp", from: -30, to: 40, kinds: ["turboshaft"], hint: "collective at hover (~0.55)" },
@@ -57,7 +58,21 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
   const ctx2d = canvas.getContext("2d")!;
   const varOf = (k: string): VarDef => VARS.find((v) => v.key === k) ?? VARS[0];
 
-  let result: { x: VarDef; y: Signal; s: VarDef | null; xs: number[]; series: { label: string; ys: number[] }[]; fixed: string } | null = null;
+  // The result is kept in SI; the display unit is applied when drawing or
+  // exporting, so a unit switch before, during or after a run shows the same
+  // physical points correctly labelled.
+  let result: { x: VarDef; y: Signal; s: VarDef | null; xsSi: number[]; svSi: number[]; ysSi: number[][]; fixedSi: [VarDef, number][] } | null = null;
+  const showVal = (v: VarDef, si: number): string => String(+v.fromSi(si).toFixed(v.decimals));
+  const view = (): { xs: number[]; series: { label: string; ys: number[] }[]; fixed: string } | null => {
+    if (!result) return null;
+    const { x, y, s, xsSi, svSi, ysSi, fixedSi } = result;
+    const conv = (v: number): number => (unitSystem() === "si" ? v : y.toImp(v));
+    return {
+      xs: xsSi.map((v) => x.fromSi(v)),
+      series: svSi.map((v, k) => ({ label: s ? `${s.label().replace(/ \(.*\)$/, "")} ${showVal(s, v)}` : y.label, ys: ysSi[k].map(conv) })),
+      fixed: fixedSi.map(([v, si]) => `${v.label()} ${showVal(v, si)}`).join(" · "),
+    };
+  };
 
   const vars = (): VarDef[] => VARS.filter((v) => v.key !== "n1" || ctx.hasN1());
   const fillVars = (): void => {
@@ -73,11 +88,13 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
   helpBtn.addEventListener("click", () => { help.classList.toggle("hidden"); helpBtn.classList.toggle("active", !help.classList.contains("hidden")); });
   const applyRecipe = (r: Recipe): void => {
     xSel.value = r.x; setRange();
-    if (r.from !== undefined) from.value = String(r.from);
-    if (r.to !== undefined) to.value = String(r.to);
+    const xv = varOf(r.x);
+    if (r.from !== undefined) from.value = showVal(xv, r.from);
+    if (r.to !== undefined) to.value = showVal(xv, r.to);
     if (activeSignals().some((sg) => sg.key === r.y)) ySel.value = r.y;
     sSel.value = r.s && vars().some((v) => v.key === r.s) ? r.s : "";
-    sVals.value = sSel.value ? (r.sv ?? varOf(sSel.value).seriesDef()) : ""; sVals.disabled = !sSel.value;
+    const sv = sSel.value ? varOf(sSel.value) : null;
+    sVals.value = sv ? (r.sv ? r.sv.split(/[,\s]+/).map(parseFloat).filter(Number.isFinite).map((v) => showVal(sv, v)).join(", ") : sv.seriesDef()) : ""; sVals.disabled = !sSel.value;
     status.textContent = `${r.label}: ${r.hint ? r.hint + ", then " : ""}press Run sweep.`;
     help.classList.add("hidden"); helpBtn.classList.remove("active");
     btnRun.focus();
@@ -108,8 +125,9 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
       if (xSel.value === "alt") { const a = parseFloat(from.value), b = parseFloat(to.value); if (Number.isFinite(a)) from.value = fmt(a); if (Number.isFinite(b)) to.value = fmt(b); }
       if (sSel.value === "alt") sVals.value = sVals.value.split(/[,\s]+/).map(parseFloat).filter(Number.isFinite).map(fmt).join(", ");
       lastUnits = unitSystem();
-    } else setRange();
-    result = null; draw();
+      // The result is stored in SI: redraw it in the new unit rather than discard it
+      draw();
+    } else { setRange(); result = null; draw(); }
   };
   const setRange = (): void => { const [a, b] = varOf(xSel.value).def(); from.value = String(a); to.value = String(b); };
   xSel.addEventListener("change", setRange);
@@ -136,14 +154,15 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
       points.push(p as unknown as SweepPoint);
     }
     btnRun.disabled = true; status.textContent = `Computing ${points.length} steady-state points…`;
+    // Convert the request to SI now, under the unit system it was typed in
+    const xsSi = xs.map((v) => x.toSi(v)), svSi = s ? sv.map((v) => s.toSi(v)) : [NaN];
     try {
       const states: AnyState[] = await ctx.client.sweep(points);
-      const conv = (v: number): number => (unitSystem() === "si" ? v : y.toImp(v));
-      const series = sv.map((v, k) => ({ label: s ? `${s.label().replace(/ \(.*\)$/, "")} ${v}` : y.label, ys: xs.map((_, i) => conv(y.get(states[k * n + i]))) }));
+      const ysSi = svSi.map((_, k) => xs.map((_, i) => y.get(states[k * n + i])));
       const usesN1 = x.key === "n1" || s?.key === "n1";
-      const fixedParts = vars().filter((v) => v.key !== x.key && v.key !== s?.key && v.key !== "n1" && (v.key !== "level" || !usesN1)).map((v) => `${v.label()} ${v.fromSi((base as unknown as Record<string, number>)[v.key]).toFixed(v.decimals)}`);
-      result = { x, y, s, xs, series, fixed: fixedParts.join(" · ") };
-      status.textContent = `${points.length} points, others held at ${result.fixed}.`;
+      const fixedSi: [VarDef, number][] = vars().filter((v) => v.key !== x.key && v.key !== s?.key && v.key !== "n1" && (v.key !== "level" || !usesN1)).map((v) => [v, (base as unknown as Record<string, number>)[v.key]]);
+      result = { x, y, s, xsSi, svSi, ysSi, fixedSi };
+      status.textContent = `${points.length} points, others held at ${view()!.fixed}.`;
       draw();
     } catch (e) {
       status.textContent = `Sweep failed: ${String(e)}`;
@@ -151,8 +170,9 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
   };
   btnRun.addEventListener("click", () => void run());
   btnCsv.addEventListener("click", () => {
-    if (!result) return;
-    const { x, y, series, xs } = result;
+    const v = view();
+    if (!result || !v) return;
+    const { x, y } = result; const { series, xs } = v;
     const unit = unitSystem() === "si" ? y.unitSi : y.unitImp;
     const head = [x.label(), ...series.map((s) => `${s.label} (${unit})`)].join(",");
     const rows = xs.map((xv, i) => [xv, ...series.map((s) => s.ys[i])].map((v) => (Number.isFinite(v) ? String(+v.toFixed(4)) : "")).join(","));
@@ -169,8 +189,9 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, w, h);
     c.font = "10px ui-monospace, Menlo, monospace";
-    if (!result) { c.fillStyle = "#5c6670"; c.textAlign = "center"; c.fillText("Choose the variables and press Run sweep", w / 2, h / 2); return; }
-    const { x, y, xs, series } = result;
+    const v = view();
+    if (!result || !v) { c.fillStyle = "#5c6670"; c.textAlign = "center"; c.fillText("Choose the variables and press Run sweep", w / 2, h / 2); return; }
+    const { x, y } = result; const { xs, series } = v;
     const padL = 52, padR = 10, padT = 18, padB = 26;
     const pw = w - padL - padR, ph = h - padT - padB;
     const all = series.flatMap((s) => s.ys).filter(Number.isFinite);

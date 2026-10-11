@@ -23,6 +23,13 @@ impl Simulator {
         Ok(Simulator { engine: AnyEngine::new(spec) })
     }
 
+    /// Independent copy of this simulator: state, controls, faults and
+    /// environment included. Parametric sweeps run on one so that bleeds,
+    /// propeller lever and the rest match the running engine.
+    pub fn clone_sim(&self) -> Simulator {
+        Simulator { engine: self.engine.clone() }
+    }
+
     /// Default spec JSON for an engine kind or preset: "turbofan" (CFM56-7B26),
     /// "leap1b" (LEAP-1B28), "piston", "turboprop".
     pub fn default_spec_json_for(kind: &str) -> Result<String, JsValue> {

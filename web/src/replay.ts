@@ -53,6 +53,8 @@ export interface Mapping {
   columns: Record<string, string | undefined>;
   /** unit option index per channel (inputs: lever/alt/time; signals: importUnits index) */
   units: Record<string, number>;
+  /** signal key -> why a likely column was left unmapped (unit the engine cannot take) */
+  notes: Record<string, string>;
 }
 
 const INPUT_PATTERNS: Record<InputChannel, RegExp[]> = {
@@ -89,7 +91,7 @@ export function suffixUnit(column: string): string | undefined {
 }
 
 export function autoMap(columns: string[]): Mapping {
-  const m: Mapping = { columns: {}, units: {} };
+  const m: Mapping = { columns: {}, units: {}, notes: {} };
   const lower = (c: string): string => c.toLowerCase();
   for (const ch of INPUT_CHANNELS) {
     const pats = ch === "lever" && activeSignals().some((s) => s.key === "nr") ? [...LEVER_PATTERNS_TURBOSHAFT, ...INPUT_PATTERNS.lever] : INPUT_PATTERNS[ch];
@@ -105,8 +107,11 @@ export function autoMap(columns: string[]): Mapping {
     const cands: string[] = [];
     for (const re of s.patterns!) for (const c of columns) if (!used.has(c) && !cands.includes(c) && re.test(c)) cands.push(c);
     const unitOf = (c: string): number => { const u = suffixUnit(c); return u === undefined ? -2 : opts.findIndex((o) => o.label === u); };
-    const hit = cands.find((c) => unitOf(c) >= 0) ?? cands.find((c) => unitOf(c) === -2) ?? cands[0];
+    // A column whose suffix names a unit this signal cannot take is left
+    // unmapped and explained, never imported with the wrong unit
+    const hit = cands.find((c) => unitOf(c) >= 0) ?? cands.find((c) => unitOf(c) === -2);
     if (hit) { m.columns[s.key] = hit; used.add(hit); }
+    else if (cands.length) m.notes[s.key] = `${cands[0]} is in ${suffixUnit(cands[0])}; ${s.label} on this engine is ${opts.map((o) => o.label).join(" / ") || "not convertible"}`;
     m.units[s.key] = Math.max(0, hit ? unitOf(hit) : 0);
     const name = lower(m.columns[s.key] ?? "");
     const explicit = hit !== undefined && unitOf(hit) >= 0;

@@ -554,7 +554,8 @@ async function main(): Promise<void> {
   const loadLog = (text: string, name: string): void => {
     try {
       logTable = parseCsv(text); mapping = autoMap(logTable.columns);
-      replayStatus.classList.remove("err"); replayStatus.textContent = `${name}: ${logTable.n} rows, ${logTable.columns.length} columns. Check the mapping, then Replay.`;
+      const notes = Object.values(mapping.notes);
+      replayStatus.classList.remove("err"); replayStatus.textContent = `${name}: ${logTable.n} rows, ${logTable.columns.length} columns. Check the mapping, then Replay.${notes.length ? " Not mapped: " + notes.join("; ") + "." : ""}`;
       buildMapping(); btnReplayRun.disabled = false; statsTable.innerHTML = "";
     } catch (e) { replayStatus.classList.add("err"); replayStatus.textContent = String(e); }
   };

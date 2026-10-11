@@ -92,6 +92,13 @@ test("a percent-torque engine picks torque_pct over torque_ftlb", () => {
   assert.equal(map2.units.torque, 0);
 });
 
+test("a column in a unit the engine cannot take is left unmapped with a note", () => {
+  setActiveSignals(kindDef("turboshaft").signals);
+  const map = autoMap(["time_s", "torque_ftlb", "ng_pct"]);
+  assert.equal(map.columns.torque, undefined);
+  assert.match(map.notes.torque, /torque_ftlb is in ft·lb/);
+});
+
 test("quoted CSV values parse and bad time columns are rejected", () => {
   const t = parseCsv('"time_s","n1_pct","egt_c"\n"0","20","400"\n"1","21","410"\n"2","22","420"\n');
   assert.deepEqual([...t.rows[1]], [20, 21, 22]);

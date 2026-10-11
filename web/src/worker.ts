@@ -105,13 +105,14 @@ self.onmessage = async (ev: MessageEvent<Msg>) => {
         break;
       }
       case "sweep": {
-        // Steady-state points on a private simulator built from the spec in
-        // force when the sweep started; the running engines are untouched.
-        // Computed in ~25 ms slices so the clock keeps ticking. If the engine
-        // is changed meanwhile the sweep is void rather than a mix of two engines.
+        // Steady-state points on a private copy of engine 1 taken when the
+        // sweep starts (same spec, controls, bleeds, faults); the running
+        // engines are untouched. Computed in ~25 ms slices so the clock keeps
+        // ticking. If the engine is changed meanwhile the sweep is void rather
+        // than a mix of two engines.
         const states: string[] = [];
         const gen = generation;
-        const s = new Simulator(specJson);
+        const s = sims[0].clone_sim();
         let i = 0;
         const slice = (): void => {
           if (generation !== gen) { s.free(); (self as unknown as Worker).postMessage({ type: "error", id: m.id, message: "The engine changed during the sweep; run it again." }); return; }
