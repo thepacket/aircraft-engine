@@ -53,8 +53,11 @@ https://aircraftengine.fly.dev, no install needed.
   turbojet, 5 turboshaft, plus two to four per newer preset, including hot
   starts, a surge and a flameout, with checkpoints tuned to that engine).
 - Assessment: `check` and `watch` lines in a lesson script set pass/fail
-  criteria on any signal (EGT under the start limit, idle N1 in range, 95 %
-  thrust within the FAR 33.73 time) and the IDE reports the results. Every
+  criteria on any signal (EGT under the start limit, idle N1 in range, thrust
+  reached within a set time) and the IDE reports the results. A check the
+  script never reaches is graded as failed, so a lesson cannot pass by
+  skipping the event it demonstrates; the FAR 33.73 timing itself is checked
+  in the core's test suite, not in a lesson. Every
   graded run is kept in the Results tab with its engine, lesson, score and
   per-check details, and exports as CSV or JSON.
 - Parametric sweeps: steady-state thrust, TSFC, EGT or any other signal

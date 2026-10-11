@@ -6,7 +6,8 @@ at 0    running 0
 at 0    log on
 at 5    note Slam acceleration with a damaged compressor
 at 5    tla 1.0
-when sm_hpc < 0  note SURGE: fuel to the decel floor, accel schedule re-armed
+when surges >= 1  note SURGE: fuel to the decel floor, accel schedule re-armed
+at 25   check surges >= 1
 at 25   tla 0
 at 45   note Same engine, lever advanced gently: no surge
 at 45   watch sm_hpc > 0
@@ -30,4 +31,6 @@ at 95   tla 0.85
 at 98   tla 0.90
 at 101  tla 0.95
 at 104  tla 1.00
+at 118  check surges <= 1
+at 118  check n1 >= 99
 at 120  end

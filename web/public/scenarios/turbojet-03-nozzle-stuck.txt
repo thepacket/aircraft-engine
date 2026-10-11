@@ -1,16 +1,21 @@
 # Exhaust nozzle stuck closed with the afterburner lit: the reheated gas
-# cannot pass the military-power throat, the turbine back-pressure rises,
-# EGT climbs and the compressor runs into stall. Procedure: A/B off at once.
+# cannot pass the military-power throat, the turbine back-pressure rises and
+# the compressor stalls. The EGT gauge lags; the stall itself is the cue.
+# Procedure: A/B OFF at once (throttle to MIL). With the nozzle at the MIL
+# position and no reheat, the engine recovers and runs normally.
 at 0    alt 0
 at 0    mach 0
 at 0    running 1.0
 at 0    log on
 at 5    note Nozzle actuator fails at the MIL position
 at 5    fault nozzle_stuck on
-at 10   note Select MAX A/B: watch EGT and stall margin
+at 10   note Select MAX A/B: watch the stall margin
 at 10   tla 1.3
-when egt >= 700  note EGT past 700 C: A/B OFF, throttle to MIL
-when egt >= 700  tla 1.0
-at 20   check stalls >= 1
+when stalls >= 1  note COMPRESSOR STALL: A/B OFF, throttle to MIL
+when stalls >= 1  tla 1.0
+at 25   check stalls >= 1
+at 40   check stalls <= 1
+at 40   check ff_ab < 0.001
+at 40   check n >= 95
 at 40   check egt < 700
 at 45   end

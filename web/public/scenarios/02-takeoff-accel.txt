@@ -1,5 +1,8 @@
-# Idle to takeoff thrust: FAR 33.73 requires 95% rated thrust within 5 s
-# from flight idle. Watch the EGT overshoot and the fuel flow spike.
+# Ground idle to takeoff thrust: a demonstration of the acceleration transient
+# (EGT overshoot, fuel flow spike, surge margin). It starts from GROUND idle,
+# below the point the certification rule counts from, so it is not the
+# 14 CFR 33.73(b) test; that one (flight idle to 95 % thrust in 5 s) is run in
+# the core's test suite. Here the check is 95 % thrust within 8 s.
 at 0    running 0
 at 0    log on
 at 5    note Thrust lever to TO/GA

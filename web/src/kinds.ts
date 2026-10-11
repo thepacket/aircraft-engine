@@ -71,6 +71,7 @@ const turbofanSignals: Signal[] = [
   sig("vib", "Vibration", "units", "units", id, 0, 5, 1, (s) => Math.max(s.vib_n1, s.vib_n2), [/^vib/i, /vibration/i]),
   sig("sm_hpc", "HPC surge margin", "%", "%", id, -10, 30, 1, (s) => s.hpc_surge_margin_pct),
   sig("sm_fan", "Fan surge margin", "%", "%", id, -10, 30, 1, (s) => s.fan_surge_margin_pct),
+  sig("surges", "Surge count", "", "", id, 0, 5, 0, (s) => s.surge_count),
   sig("vbv", "VBV position", "open", "open", id, 0, 1, 2, (s) => s.vbv_open),
   sig("vsv", "VSV angle", "°", "°", id, 0, 45, 0, (s) => s.vsv_angle_deg),
   sig("bleed", "Customer bleed", "kg/s", "lb/s", (v) => v * 2.20462, 0, 6, 2, (s) => s.cycle.bleed_kg_s),
@@ -209,6 +210,7 @@ const pistonSignals: Signal[] = [
   sig("eta_p", "Prop efficiency", "", "", id, 0, 1, 2, (s) => s.prop.efficiency),
   sig("bsfc", "BSFC", "lb/hp·h", "lb/hp·h", id, 0, 1.5, 2, (s) => s.bsfc_lb_hp_h),
   sig("carb_ice", "Carb ice", "", "", id, 0, 1, 2, (s) => s.carb_ice),
+  sig("firing", "Combustion (1 = firing)", "", "", id, 0, 1, 0, (s) => (s.firing ? 1 : 0)),
   sig("rough", "Roughness", "", "", id, 0, 1.5, 2, (s) => s.roughness),
   sig("throttle", "Throttle", "", "", id, 0, 1, 2, (s) => n(s.controls.throttle)),
   sig("mixture", "Mixture", "", "", id, 0, 1, 2, (s) => n(s.controls.mixture)),
@@ -320,6 +322,7 @@ const turbopropSignals: Signal[] = [
   sig("ff_cmd", "Fuel command", "kg/s", "lb/h", (v) => v * 7936.64, 0, 0.1, 4, (s) => s.fuel_command_kg_s),
   sig("ff_max", "Accel limit", "kg/s", "lb/h", (v) => v * 7936.64, 0, 0.1, 4, (s) => s.fuel_accel_limit_kg_s),
   sig("sm", "Surge margin", "%", "%", id, -10, 25, 1, (s) => s.surge_margin_pct),
+  sig("surges", "Surge count", "", "", id, 0, 5, 0, (s) => s.surge_count),
   sig("vib", "Vibration", "units", "units", id, 0, 5, 1, (s) => s.vib),
   sig("power_lever", "Power lever", "", "", id, -0.3, 1, 2, (s) => n(s.controls.power_lever)),
   sig("prop_lever", "Prop lever", "", "", id, 0, 1, 2, (s) => n(s.controls.prop_lever)),
@@ -576,6 +579,7 @@ const turboshaftSignals: Signal[] = [
   sig("wf_p3", "Wf/Ps3", "", "", id, 0, 0.5, 3, (s) => s.wf_p3_ratio),
   sig("t4", "T4 turbine inlet", "K", "K", id, 200, 1500, 0, (s) => s.t4_k),
   sig("sm", "Surge margin", "%", "%", id, -5, 25, 1, (s) => s.surge_margin_pct),
+  sig("surges", "Surge count", "", "", id, 0, 5, 0, (s) => s.surge_count),
   sig("oilp", "Oil pressure", "psi", "psi", id, 0, 150, 0, (s) => s.oil_pressure_psi, [/oil.?press/i], U_PSI),
   sig("oilt", "Oil temperature", "°C", "°C", id, 0, 130, 0, (s) => s.oil_temperature_c, [/oil.?temp/i], U_TEMP_C),
   sig("collective", "Collective", "", "", id, 0, 1, 2, (s) => n(s.controls.collective)),
@@ -684,16 +688,21 @@ const turboshaft: KindDef = {
 export const KINDS: Record<string, KindDef> = { turbofan, piston, turboprop, turbojet, turboshaft };
 
 /** Lessons written for a specific preset, listed before the family's lessons. */
-export const PRESET_LESSONS: Record<string, [string, string][]> = {
-  leap1b: [["leap-01-ground-start.txt", "LEAP 01 Ground start"], ["leap-02-takeoff-accel.txt", "LEAP 02 Idle → takeoff acceleration"], ["leap-03-hot-start.txt", "LEAP 03 Hot start"]],
-  v2500: [["v2500-01-ground-start.txt", "V2500 01 Ground start"], ["v2500-02-takeoff-accel.txt", "V2500 02 Idle → takeoff acceleration"], ["v2500-03-hot-start.txt", "V2500 03 Hot start"], ["v2500-04-surge.txt", "V2500 04 Compressor surge"]],
-  pw1100g: [["pw1100g-01-ground-start.txt", "GTF 01 Ground start"], ["pw1100g-02-takeoff-accel.txt", "GTF 02 Idle → takeoff acceleration"], ["pw1100g-03-hot-start.txt", "GTF 03 Hot start"], ["pw1100g-04-flameout-relight.txt", "GTF 04 Flameout and auto-relight"]],
-  o320: [["o320-01-cold-start.txt", "O-320 01 Cold start, run-up and mag check"], ["o320-02-takeoff-climb.txt", "O-320 02 Takeoff and climb"]],
-  pt6a42: [["pt6a42-01-start.txt", "PT6A-42 01 Ground start"], ["pt6a42-02-takeoff-torque-itt.txt", "PT6A-42 02 Takeoff: torque vs ITT"]],
+/** Lessons written for a specific preset, and the family lessons they replace
+ *  (those carry the family's default engine's limits in their checks and notes,
+ *  so they are not offered for a preset that has its own version). */
+export const PRESET_LESSONS: Record<string, { lessons: [string, string][]; replaces: string[] }> = {
+  leap1b: { lessons: [["leap-01-ground-start.txt", "LEAP 01 Ground start"], ["leap-02-takeoff-accel.txt", "LEAP 02 Idle → takeoff acceleration"], ["leap-03-hot-start.txt", "LEAP 03 Hot start"]], replaces: ["01-ground-start.txt", "02-takeoff-accel.txt", "07-hot-start.txt"] },
+  v2500: { lessons: [["v2500-01-ground-start.txt", "V2500 01 Ground start"], ["v2500-02-takeoff-accel.txt", "V2500 02 Idle → takeoff acceleration"], ["v2500-03-hot-start.txt", "V2500 03 Hot start"], ["v2500-04-surge.txt", "V2500 04 Compressor surge"]], replaces: ["01-ground-start.txt", "02-takeoff-accel.txt", "07-hot-start.txt", "10-surge.txt"] },
+  pw1100g: { lessons: [["pw1100g-01-ground-start.txt", "GTF 01 Ground start"], ["pw1100g-02-takeoff-accel.txt", "GTF 02 Idle → takeoff acceleration"], ["pw1100g-03-hot-start.txt", "GTF 03 Hot start"], ["pw1100g-04-flameout-relight.txt", "GTF 04 Flameout and auto-relight"]], replaces: ["01-ground-start.txt", "02-takeoff-accel.txt", "07-hot-start.txt", "11-flameout-relight.txt"] },
+  o320: { lessons: [["o320-01-cold-start.txt", "O-320 01 Cold start, run-up and mag check"], ["o320-02-takeoff-climb.txt", "O-320 02 Takeoff and climb"]], replaces: ["piston-01-cold-start.txt", "piston-02-mag-check.txt", "piston-03-takeoff-climb.txt"] },
+  pt6a42: { lessons: [["pt6a42-01-start.txt", "PT6A-42 01 Ground start"], ["pt6a42-02-takeoff-torque-itt.txt", "PT6A-42 02 Takeoff: torque vs ITT"]], replaces: ["turboprop-01-start.txt", "turboprop-02-takeoff-torque-itt.txt"] },
 };
 
 export function lessonsFor(kind: KindDef, preset: string): [string, string][] {
-  return [...(PRESET_LESSONS[preset] ?? []), ...kind.lessons];
+  const own = PRESET_LESSONS[preset];
+  if (!own) return kind.lessons;
+  return [...own.lessons, ...kind.lessons.filter(([file]) => !own.replaces.includes(file))];
 }
 
 /** Descriptor for an engine kind; dial limits follow the spec's limits block. */

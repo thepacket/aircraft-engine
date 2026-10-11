@@ -1,25 +1,40 @@
-# Magneto check at 1,800 rpm: each mag alone should drop 75-125 rpm with no
-# more than 50 rpm difference. Then the same check with a fouled plug, and
-# with a dead magneto.
-at 0    running 0.47
+# Magneto check at ~1,800 rpm. Each magneto alone fires one plug per cylinder,
+# so the charge burns a little slower and the rpm drops. Lycoming's limits are
+# a MAXIMUM drop of 175 rpm and no more than 50 rpm difference between the two
+# magnetos; a drop of 50-150 is typical, and NO drop means a mag is not
+# grounding (both still live). Then the same check with a fouled plug, and with
+# a dead magneto.
+at 0    running 0.35
 at 0    log on
-at 5    note Both mags: note rpm
-at 10   note LEFT only
+at 5    note Both mags: note the rpm
+at 5    check rpm >= 1700
+at 5    check rpm <= 1880
+at 10   note LEFT only: a small, smooth drop
 at 10   ctl magnetos 1
+at 18   check rpm <= 1810
+at 18   check rpm >= 1600
 at 20   ctl magnetos 3
-at 25   note RIGHT only
+at 25   note RIGHT only: about the same drop (within 50 rpm of LEFT)
 at 25   ctl magnetos 2
+at 33   check rpm <= 1810
+at 33   check rpm >= 1600
 at 35   ctl magnetos 3
-at 45   note Fouled plug on the left-mag side: big drop and roughness on LEFT
+at 45   note Fouled plug on the left-mag side: a big drop and roughness on LEFT (over the 175 limit)
 at 45   fault plug_fouled on
 at 48   ctl magnetos 1
+at 58   check rpm < 1600
+at 58   check rough > 0
 at 60   ctl magnetos 3
 at 65   fault plug_fouled off
-at 70   note Dead right magneto: engine quits on RIGHT alone
+at 70   note Dead right magneto: the engine quits on RIGHT alone
 at 70   fault mag_right_fail on
 at 73   ctl magnetos 2
+when rpm < 300  note Engine stopped. Back to BOTH and restart with the starter
+when rpm < 300  check firing < 0.5
 when rpm < 300  ctl magnetos 3
-when rpm < 300  note Back to BOTH: restart with the starter
 when rpm < 300  ctl starter on
 when rpm >= 600 ctl starter off
+when rpm >= 600 note Running on the left magneto alone
+at 108  check firing >= 0.5
+at 108  check rpm >= 1500
 at 110  end

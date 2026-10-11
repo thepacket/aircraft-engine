@@ -1,20 +1,31 @@
 # Leaning at 8,000 ft: full rich is too rich (the carburettor meters by
 # venturi pressure drop, so F/A rises as the air thins). Lean toward peak EGT,
-# then 50 F rich of peak for cruise, and see the fuel flow and power change.
+# note the peak, then set about 50 F rich of peak for cruise, and compare the
+# fuel flow and power with full rich. The numbers in the notes are what this
+# model shows; on a real engine, read the peak off the gauge and work from it.
 at 0    alt 2438
 at 0    mach 0.18
 at 0    running 1
 at 0    log on
-at 5    note Full rich at 8,000 ft: F/A ~0.10, EGT low, 13 gph
+at 5    note Full rich at 8,000 ft: F/A ~0.10, EGT ~1,000 F, 13 gph, and power is BELOW best power
+at 8    check egt < 1100
+at 8    check ff_gph >= 11
 at 10   ctl mixture 0.8
 at 20   ctl mixture 0.7
 at 30   ctl mixture 0.6
 at 40   ctl mixture 0.5
 at 50   ctl mixture 0.42
 at 60   ctl mixture 0.36
-at 70   note Near peak EGT. Lean of peak: EGT and power fall, then roughness
+at 70   note Near peak EGT (~1,410 F here). Lean of peak: EGT and power fall, then roughness
 at 70   ctl mixture 0.30
+at 83   check egt >= 1390
 at 85   ctl mixture 0.24
-at 100  note Back to 50 F rich of peak for cruise
-at 100  ctl mixture 0.45
+at 98   check power_pct < 70
+at 100  note Back to 50 F rich of peak (~1,360 F) for cruise: full power back, 3 gph less than full rich
+at 100  ctl mixture 0.38
+at 128  check egt >= 1340
+at 128  check egt <= 1385
+at 128  check power_pct >= 68
+at 128  check ff_gph <= 10.5
+# (checks are in percent of rated power so the O-320 lesson grades the same way)
 at 130  end

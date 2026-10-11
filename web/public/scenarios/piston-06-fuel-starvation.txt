@@ -1,17 +1,21 @@
 # Fuel starvation: selector OFF in cruise. The float bowl keeps the engine
-# running for a few seconds, then it quits. Restart: selector BOTH, pump on,
-# mixture rich, crank.
+# running for a few seconds, then combustion stops. The propeller keeps
+# windmilling at this airspeed (the rpm does NOT fall to zero), so the rpm
+# gauge is not the sign of failure: the engine quits, the aircraft slows.
+# Restart: selector BOTH, pump ON, mixture RICH; with the prop windmilling it
+# fires as soon as fuel reaches the carburettor, no starter needed.
 at 0    alt 1500
 at 0    mach 0.17
 at 0    running 0.7
 at 0    log on
 at 10   note Fuel selector OFF
 at 10   ctl fuel_selector 0
-when rpm < 400  note Engine failure. Selector BOTH, pump ON, mixture RICH, crank
-when rpm < 400  ctl fuel_selector 3
-when rpm < 400  ctl fuel_pump on
-when rpm < 400  ctl mixture 1
-when rpm < 400  ctl starter on
-when rpm >= 1500 ctl starter off
-when rpm >= 1500 note Restarted
+when firing < 0.5  note Engine failure, prop windmilling. Selector BOTH, pump ON, mixture RICH
+when firing < 0.5  check rpm > 1000
+when firing < 0.5  ctl fuel_selector 3
+when firing < 0.5  ctl fuel_pump on
+when firing < 0.5  ctl mixture 1
+when firing >= 0.5 note Restarted
+at 58   check firing >= 0.5
+at 58   check rpm >= 2300
 at 60   end

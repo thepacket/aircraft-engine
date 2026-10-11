@@ -10,6 +10,12 @@
 import { hasSignal } from "./signals";
 
 export interface ScenarioEvent {
+  /** Conditional events form stages: consecutive `when` lines with the same
+   *  condition are one stage, and a stage is armed only once every earlier
+   *  stage has fired, so a recovery step cannot run before the failure it
+   *  answers (`when rpm >= 600 starter off` waits for the `when rpm < 300`
+   *  block above it). Unconditional `at` lines are not staged. */
+  stage?: number;
   t: number; cmd: string; arg: string; line: number;
   cond?: { signal: string; op: string; value: number };
   fired?: boolean;
@@ -67,6 +73,7 @@ export function parseScenario(text: string): { events: ScenarioEvent[]; errors: 
   const events: ScenarioEvent[] = [];
   const errors: string[] = [];
   let lastAt = 0;
+  let stage = 0, lastCond = "";
   text.split(/\r?\n/).forEach((raw, i) => {
     const line = raw.split("#")[0].trim();
     if (!line) return;
@@ -84,7 +91,9 @@ export function parseScenario(text: string): { events: ScenarioEvent[]; errors: 
       if (!OPS.has(when[2])) { errors.push(`line ${i + 1}: bad operator "${when[2]}"`); return; }
       if (!COMMANDS.includes(cmd)) { errors.push(`line ${i + 1}: unknown command "${when[4]}"`); return; }
       if (!validateCheck(cmd, when[5].trim(), i, errors)) return;
-      events.push({ t: lastAt, cmd, arg: when[5].trim(), line: i + 1, cond: { signal: when[1], op: when[2], value: parseFloat(when[3]) } });
+      const condText = `${when[1].toLowerCase()}${when[2]}${parseFloat(when[3])}`;
+      if (condText !== lastCond) { stage++; lastCond = condText; }
+      events.push({ t: lastAt, cmd, arg: when[5].trim(), line: i + 1, cond: { signal: when[1], op: when[2], value: parseFloat(when[3]) }, stage });
     } else {
       errors.push(`line ${i + 1}: expected "at <seconds> <command>" or "when <signal> <op> <value> <command>"`);
     }
@@ -147,10 +156,18 @@ export class ScenarioRunner {
   }
   /** Checks and watches the script still had ahead of it when it was stopped */
   get skipped(): number { return this.events.filter((e) => !e.fired && (e.cmd === "check" || e.cmd === "watch")).length; }
-  /** Close the open watches (they pass if never violated) and stop. */
+  /** Normal completion: close the open watches (they pass if never violated),
+   *  and grade every check or watch the script never reached as failed, so a
+   *  lesson cannot pass by skipping the event it was meant to prove. */
   private finish(): void {
     for (const w of this.watches) if (w.result.pass === null) { w.result.pass = true; w.result.detail = `held to t+${this.elapsed.toFixed(0)} s`; }
     this.watches = [];
+    for (const e of this.events) {
+      if (e.fired || (e.cmd !== "check" && e.cmd !== "watch")) continue;
+      e.fired = true;
+      const why = e.cond ? `${e.cond.signal} ${e.cond.op} ${e.cond.value} never held` : `t+${e.t} s not reached`;
+      this.results.push({ line: e.line, kind: e.cmd, text: e.arg, pass: false, detail: `not reached: ${why}` });
+    }
     this.active = false;
   }
   get summary(): { passed: number; failed: number; pending: number } {
@@ -159,7 +176,9 @@ export class ScenarioRunner {
     return { passed, failed, pending };
   }
   get elapsed(): number { return this.lastT - this.t0; }
-  private get armed(): ScenarioEvent[] { const rel = this.lastT - this.t0; return this.events.filter((e) => e.cond && !e.fired && e.t <= rel); }
+  /** A staged event is eligible once every earlier stage has fired */
+  private stageOpen(e: ScenarioEvent): boolean { return e.stage === undefined || this.events.every((o) => o.stage === undefined || o.stage >= e.stage! || o.fired); }
+  private get armed(): ScenarioEvent[] { const rel = this.lastT - this.t0; return this.events.filter((e) => e.cond && !e.fired && e.t <= rel && this.stageOpen(e)); }
   get pendingConditions(): string[] { return this.armed.map((e) => `${e.cond!.signal} ${e.cond!.op} ${e.cond!.value} → ${e.cmd} ${e.arg}`); }
   /** Script lines of the conditional events waiting to fire */
   get waitingLines(): number[] { return this.armed.map((e) => e.line); }
@@ -170,7 +189,7 @@ export class ScenarioRunner {
     const rel = simTime - this.t0;
     for (const e of this.events) {
       if (e.fired || e.t > rel + 1e-9) continue;
-      if (e.cond && !test(e.cond.op, this.read(e.cond.signal), e.cond.value)) continue;
+      if (e.cond && (!this.stageOpen(e) || !test(e.cond.op, this.read(e.cond.signal), e.cond.value))) continue;
       e.fired = true;
       this.apply(e);
       if (!this.active) return;
@@ -233,7 +252,8 @@ export class ScenarioRunner {
       }
       // The ending tick still counts for the watches, so a limit busted on the
       // same tick as `end` is not missed.
-      case "end": this.evalWatches(this.lastT - this.t0); this.h.end(); this.finish(); break;
+      // Finish (grading the watches) before telling the UI, which records the result
+      case "end": this.evalWatches(this.lastT - this.t0); this.finish(); this.h.end(); break;
     }
   }
 }
