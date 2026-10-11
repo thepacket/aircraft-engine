@@ -29,7 +29,7 @@ html, body { margin: 0; height: 100%; background: var(--floor); color: var(--tex
   display: grid;
   --right-w: 360px;
   grid-template-columns: 340px 1fr var(--right-w);
-  grid-template-rows: 54px 1fr;
+  grid-template-rows: auto 1fr;
   grid-template-areas: "top top top" "left center right";
   height: 100vh;
   gap: 12px;
@@ -54,16 +54,17 @@ html, body { margin: 0; height: 100%; background: var(--floor); color: var(--tex
 
 /* ---- glareshield / MCP ---- */
 #topbar {
-  grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  grid-area: top; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
+  min-height: 54px; padding: 6px 14px;
   background: linear-gradient(#2a2e33, #202327 60%, #17191c);
-  border: 1px solid #0d0f11; border-radius: 6px 6px 3px 3px; padding: 0 14px;
+  border: 1px solid #0d0f11; border-radius: 6px 6px 3px 3px;
   box-shadow: inset 0 1px 0 #ffffff1a, 0 4px 10px #000c;
 }
-.brand { min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.brand { min-width: 0; flex: 1 1 220px; display: flex; flex-direction: column; line-height: 1.15; }
 .brand-title { font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--placard); text-shadow: 0 1px 0 #000; white-space: nowrap; }
 .brand-sub { color: var(--muted); font-family: var(--mono); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-center { display: flex; align-items: center; gap: 10px; }
-.topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.topbar-right { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .topbar-right label { color: var(--placard); display: flex; gap: 6px; align-items: center; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; text-shadow: 0 1px 0 #000; }
 .mode-badge, .sim-time { font-family: var(--mono); background: #050607; border: 1px solid #0a0b0c; border-radius: 2px; box-shadow: inset 0 2px 5px #000, 0 0 0 1px #3a3f45; padding: 4px 12px; }
 .mode-badge { font-weight: 700; color: #2d3237; letter-spacing: 2px; min-width: 110px; text-align: center; }
@@ -259,8 +260,6 @@ table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); 
   #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "top" "center" "left" "right"; height: auto; }
   #splitter, #hsplitter { display: none; }
   .eicas { height: auto; }
-  #topbar { flex-wrap: wrap; padding: 8px 14px; row-gap: 8px; }
-  .topbar-right { flex-wrap: wrap; }
   #eicas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
