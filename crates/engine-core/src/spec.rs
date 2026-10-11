@@ -537,12 +537,20 @@ impl EngineSpec {
     /// class, EGT / speed / oil limits. The V2500 reads EGT at the LPT exit,
     /// hence the low EGT numbers and the probe fraction near 1. Calibration
     /// knobs start from the CFM56-7B26 and are approximations.
-    /// Calibration status: at the ICAO databank point for record 1IA003
-    /// (111.2 kN sea-level static, 4.5 % bleed) the databank lists 1.053 kg/s;
-    /// this model gives ~1.23 kg/s (+16 %). Raising the OPR from 27.5 to 35
-    /// changes that by under 2 %, and closing it with component efficiencies
-    /// alone would need values above 0.95, so the gap is left open rather than
-    /// hidden in the constants.
+    /// Calibration status (tests/icao.rs): at the ICAO databank point for
+    /// record 1IA003 (111.2 kN sea-level static, 4.5 % bleed) the databank
+    /// lists 1.053 kg/s; this model gives ~1.23 kg/s (+16 %). Investigated
+    /// 2026-10-11 by sweeping one parameter at a time at that point:
+    ///   cooling bleed 0.14 -> 0.10        -1.6 %
+    ///   OPR 27.5 -> 32.8                  -1.5 %  (an IAE flyer gives 27.2, so 27.5 stays)
+    ///   fan 0.90 -> 0.92                  -1.1 %
+    ///   HPC/HPT/LPT 0.88/0.91/0.92 -> 0.90/0.92/0.93   -3.0 %
+    ///   mass flow 355 -> 380 kg/s         -2.3 %
+    ///   all of the above together         -6.5 %  (still +9.9 %)
+    /// The databank's 0.334 lb/lbf/h is 9 % better than the CFM56-7B26's, and
+    /// this cycle cannot separate two engines of the same bypass ratio and OPR
+    /// class by that much with physical constants, so the gap is recorded and
+    /// left open rather than hidden in the constants.
     pub fn v2527_a5() -> Self {
         let mut s = Self::cfm56_7b26();
         s.name = "V2527-A5".into();

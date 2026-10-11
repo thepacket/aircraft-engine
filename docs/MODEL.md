@@ -510,6 +510,7 @@ Every number in this document is pinned by a test in `crates/engine-core/tests`:
 
 | File | Tests | What they check |
 |---|---|---|
+| `icao.rs` | 1 | takeoff fuel flow vs the ICAO databank at each record's thrust and bleed, per-preset tolerance (V2500 open at +16 %) |
 | `far33_73.rs` | 3 | flight-idle and 15 % → 95 % thrust slams for the four turbofans, step-size insensitivity |
 | `regressions.rs` | 6 | review reproductions: start fuel vs cycle, altitude decel without flameout, hung start with starter engaged, leaning raises rpm, stopped engine cools to ambient, warm-air carburettor icing |
 | `validation.rs` | 29 | turbofan: design point, takeoff, idle, cruise, monotonicity, bleed, start, FAR 33.73 accel, decel, flat rating, reverser, shutdown, cruise stability, hot/wet/hung starts, weak starter, surge recovery and cycling, flameout and relight, windmill envelope, altitude relight limit, oil starvation, fire bottle, governor failure, EGT probe, logger, spec round trip |
