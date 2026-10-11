@@ -157,12 +157,15 @@ export class Dial {
         svg.appendChild(this.bugEl);
       }
     }
-    // Digital readout box
-    const bw = opts.digitalOnly ? 92 : 72;
-    const by = opts.digitalOnly ? cy - 28 : cy + 20;
-    this.valueBox = el("rect", { x: cx - bw / 2, y: by, width: bw, height: 22, fill: "#000", stroke: C.white, "stroke-width": 1.2, rx: 1 });
+    // Digital readout box, in the gap at the bottom of the arc: the scale ends
+    // at ±0.5 r below the hub (y = cy + 21 for the end labels at r − 18), so the
+    // box starts below them and stays narrower than the gap between them.
+    const bw = opts.digitalOnly ? 92 : 58;
+    const by = opts.digitalOnly ? cy - 28 : cy + 29;
+    const bh = opts.digitalOnly ? 22 : 20;
+    this.valueBox = el("rect", { x: cx - bw / 2, y: by, width: bw, height: bh, fill: "#000", stroke: C.white, "stroke-width": 1.2, rx: 1 });
     svg.appendChild(this.valueBox);
-    this.valueText = el("text", { x: cx + bw / 2 - 5, y: by + 16.5, "text-anchor": "end", fill: C.white, "font-size": 17, "font-family": "ui-monospace, Menlo, monospace", "font-weight": 600 });
+    this.valueText = el("text", { x: cx + bw / 2 - 4, y: by + bh - 5, "text-anchor": "end", fill: C.white, "font-size": opts.digitalOnly ? 17 : 15, "font-family": "ui-monospace, Menlo, monospace", "font-weight": 600 });
     this.valueText.textContent = "---";
     svg.appendChild(this.valueText);
     // Label
