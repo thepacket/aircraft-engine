@@ -431,7 +431,257 @@ const turboprop: KindDef = {
   defaultCharts: ["torque", "itt", "ng", "np"],
 };
 
-export const KINDS: Record<string, KindDef> = { turbofan, piston, turboprop };
+// --------------------------------------------------------------------------
+// Turbojet: GE J85-GE-5A (afterburning, T-38 Talon)
+// --------------------------------------------------------------------------
+const turbojetSignals: Signal[] = [
+  sig("n", "RPM", "%", "%", id, 0, 110, 1, (s) => s.n_pct, [/^n_pct$/i, /^n1?$/i, /^rpm/i], U_PCT),
+  sig("egt", "EGT", "°C", "°C", id, 0, 1000, 0, (s) => (s.egt_valid ? s.egt_c : NaN), [/^egt/i], U_TEMP_C),
+  sig("egt_gas", "EGT gas (true)", "°C", "°C", id, 0, 1000, 0, (s) => s.egt_gas_c),
+  sig("t4", "T4 turbine inlet", "K", "K", id, 200, 1600, 0, (s) => s.t4_k, [/^t4/i, /^tit/i]),
+  sig("ff", "Fuel flow (total)", "kg/s", "lb/h", (v) => v * 7936.64, 0, 1.2, 3, (s) => s.fuel_flow_kg_s, [/^fuel_flow/i, /^ff$/i, /fuel.?flow/i], U_FF),
+  sig("ff_ab", "Afterburner fuel", "kg/s", "lb/h", (v) => v * 7936.64, 0, 0.8, 3, (s) => s.ab_fuel_flow_kg_s),
+  sig("ff_cmd", "Fuel command", "kg/s", "lb/h", (v) => v * 7936.64, 0, 0.5, 3, (s) => s.fuel_command_kg_s),
+  sig("ff_max", "Accel limit", "kg/s", "lb/h", (v) => v * 7936.64, 0, 0.5, 3, (s) => s.fuel_accel_limit_kg_s),
+  sig("wf_p3", "Wf/Ps3", "", "", id, 0, 3, 2, (s) => s.wf_p3_ratio),
+  sig("ps3", "Ps3 burner pressure", "kPa", "psi", (v) => v / 6.89476, 0, 800, 0, (s) => s.ps3_kpa),
+  sig("thrust", "Net thrust", "kN", "lbf", (v) => v * 224.809, -3, 18, 2, (s) => s.thrust_n / 1000, [/^thrust/i, /^fn$/i], U_THRUST_KN),
+  sig("tsfc", "TSFC", "lb/lbf·h", "lb/lbf·h", id, 0, 3, 2, (s) => s.tsfc_lb_lbf_h),
+  sig("nozzle", "Nozzle position", "%", "%", id, 0, 100, 0, (s) => s.nozzle_pct, [/nozzle/i], U_PCT),
+  sig("sm", "Stall margin", "%", "%", id, -5, 25, 1, (s) => s.surge_margin_pct),
+  sig("stalls", "Stall count", "", "", id, 0, 5, 0, (s) => s.surge_count),
+  sig("oilp", "Oil pressure", "psi", "psi", id, 0, 60, 0, (s) => s.oil_pressure_psi, [/oil.?press/i], U_PSI),
+  sig("oilt", "Oil temperature", "°C", "°C", id, 0, 160, 0, (s) => s.oil_temperature_c, [/oil.?temp/i], U_TEMP_C),
+  sig("oilq", "Oil quantity", "qt", "qt", id, 0, 6, 1, (s) => s.oil_quantity_qt),
+  sig("vib", "Vibration", "", "", id, 0, 5, 1, (s) => s.vib),
+  sig("throttle", "Throttle", "", "", id, 0, 1.3, 2, (s) => n(s.controls.throttle)),
+  sig("alt", "Altitude", "m", "ft", (v) => v / 0.3048, 0, 15000, 0, (s) => s.environment.altitude_m),
+  sig("mach", "Mach", "", "", id, 0, 1.3, 2, (s) => s.environment.mach),
+  sig("opr", "Compressor PR", "", "", id, 0, 8, 2, (s) => s.cycle.pr),
+  sig("w2", "Air flow", "kg/s", "lb/s", (v) => v * 2.20462, 0, 25, 1, (s) => s.cycle.w2),
+  sig("npr", "Nozzle PR", "", "", id, 0, 4, 2, (s) => s.cycle.npr),
+  sig("v9", "Jet velocity", "m/s", "ft/s", (v) => v / 0.3048, 0, 900, 0, (s) => s.cycle.v9),
+];
+
+const turbojet: KindDef = {
+  kind: "turbojet",
+  title: "Turbojet",
+  eicasTitle: "Engine instruments (T-38 panel)",
+  primary: [
+    { label: "RPM", unit: "%", min: 0, max: 110, redline: 100.5, decimals: 1, get: (s) => s.n_pct },
+    { label: "EGT", unit: "°C", min: 0, max: 1000, redline: 735, amber: [690, 735], decimals: 0, get: (s) => s.egt_c, valid: (s) => s.egt_valid },
+    { label: "NOZZLE", unit: "% open", min: 0, max: 100, decimals: 0, get: (s) => s.nozzle_pct },
+    { label: "FUEL FLOW", unit: "lb/h", min: 0, max: 8, decimals: 0, digitalOnly: true, get: (s) => s.fuel_flow_pph },
+  ],
+  secondary: [
+    { label: "OIL PRESS", unit: "psi", min: 0, max: 60, redlineLow: 5, amber: [5, 25], green: [25, 50], decimals: 0, get: (s) => s.oil_pressure_psi },
+    { label: "OIL TEMP", unit: "°C", min: -40, max: 160, redline: 135, decimals: 0, get: (s) => s.oil_temperature_c },
+    { label: "THRUST", unit: "lbf", min: 0, max: 4000, decimals: 0, digitalOnly: true, get: (s) => s.thrust_lbf },
+    { label: "VIB", unit: "units", min: 0, max: 5, amber: [4, 5], decimals: 1, get: (s) => s.vib },
+  ],
+  controls: [
+    { type: "toggle", name: "starter", label: "STARTER", on: "CRANK", off: "OFF", get: (s) => b(s.controls.starter), status: (s) => (s.starter_engaged ? "MOTORING" : s.controls.starter ? "ON" : "OFF") },
+    { type: "toggle", name: "fuel", label: "THROTTLE GATE", on: "IDLE", off: "CUTOFF", get: (s) => b(s.controls.fuel), status: (s) => (s.controls.fuel ? (s.ab_lit ? "AB LIT" : "RUN") : "CUTOFF") },
+    { type: "slider", name: "throttle", label: "Throttle (idle … MIL … max A/B)", min: 0, max: 1.3, step: 0.005, scale: 100, get: (s) => n(s.controls.throttle), presets: [[0, "Idle"], [0.75, "Cruise"], [1, "MIL"], [1.3, "MAX A/B"]], width: 3 },
+    { type: "toggle", name: "anti_ice", label: "ENG ANTI-ICE", on: "ON", off: "OFF", get: (s) => b(s.controls.anti_ice) },
+  ],
+  faults: [
+    { key: "starter_inop", label: "Starter inoperative", kind: "bool" },
+    { key: "starter_weak", label: "Weak starter (hot / hung start risk)", kind: "bool" },
+    { key: "ignition_fail", label: "Igniters failed (wet start)", kind: "bool" },
+    { key: "start_fuel_factor", label: "Start fuel schedule × (1.8 = hot start)", kind: "num", def: 1, step: 0.1 },
+    { key: "fuel_pump_fail", label: "Fuel supply failure (flameout)", kind: "bool" },
+    { key: "oil_leak_qt_per_min", label: "Oil leak, qt/min", kind: "num", def: 0, step: 0.2 },
+    { key: "fire", label: "Engine fire", kind: "bool" },
+    { key: "compressor_damage_pct", label: "Stall margin lost, % points", kind: "num", def: 0, step: 1 },
+    { key: "fod", label: "Foreign object damage", kind: "bool" },
+    { key: "egt_probe_fail", label: "EGT harness open", kind: "bool" },
+    { key: "nozzle_stuck", label: "Exhaust nozzle stuck", kind: "bool" },
+    { key: "ab_fail", label: "Afterburner no light", kind: "bool" },
+    { key: "trigger_surge", label: "Compressor stall now", kind: "bool", oneshot: true },
+    { key: "trigger_flameout", label: "Flameout now", kind: "bool", oneshot: true },
+    { key: "fire_bottle", label: "Fire bottle", kind: "bool", oneshot: true },
+  ],
+  signals: turbojetSignals,
+  mainLever: "throttle",
+  fuelControl: { name: "fuel", on: 1, off: 0 },
+  runningPrep: [["fuel", 1], ["starter", 0]],
+  idleLevel: 0, cruiseLevel: 0.95, cruiseEnv: [9144, 0.85],
+  modeOf: (s) => s.mode,
+  readouts: (s) => {
+    const c = s.cycle;
+    return [
+      ["Net thrust", `${fmtThrust(s.thrust_n)} (${s.thrust_pct.toFixed(0)} % of MIL)`],
+      ["Gross thrust / ram drag", `${fmtThrust(c.gross_thrust_n)} / ${fmtThrust(c.ram_drag_n)}`],
+      ["TSFC", `${s.tsfc_lb_lbf_h.toFixed(2)} lb/lbf·h`],
+      ["Fuel flow: engine + A/B", `${((s.fuel_flow_kg_s - s.ab_fuel_flow_kg_s) * 7936.64).toFixed(0)} + ${s.ab_fuel_flow_pph.toFixed(0)} lb/h`, s.ab_lit],
+      ["Afterburner", s.ab_lit ? `LIT · ${s.ab_time_s.toFixed(0)} s · T7 ${c.tt7.toFixed(0)} K` : "off", s.ab_lit],
+      ["Nozzle: actual / command", `${s.nozzle_pct.toFixed(0)} / ${s.nozzle_command_pct.toFixed(0)} % open · ${(s.nozzle_area_m2 * 1e4).toFixed(0)} cm²`, Math.abs(s.nozzle_pct - s.nozzle_command_pct) > 10],
+      ["Fuel: steady / demand", `${(s.fuel_flow_steady_kg_s * 7936.64).toFixed(0)} / ${(s.fuel_command_kg_s * 7936.64).toFixed(0)} lb/h`],
+      ["Fuel limits (decel / accel)", `${(s.fuel_decel_limit_kg_s * 7936.64).toFixed(0)} / ${(s.fuel_accel_limit_kg_s * 7936.64).toFixed(0)} lb/h`],
+      ["Wf/Ps3", `${s.wf_p3_ratio.toFixed(2)} (kg/h)/kPa · Ps3 ${fmtPressure(s.ps3_kpa * 1000)}`],
+      ["Fuel used", fmtMass(s.fuel_used_kg)],
+      ["RPM command / idle", `${s.n_command_pct.toFixed(1)} / ${s.n_idle_pct.toFixed(1)} %`],
+      ["RPM / corrected", `${s.n_rpm.toFixed(0)} rpm / ${s.n_corrected_pct.toFixed(1)} %`],
+      ["T4 actual / steady", `${s.t4_k.toFixed(0)} / ${s.t4_steady_k.toFixed(0)} K`, Math.abs(s.t4_k - s.t4_steady_k) > 50],
+      ["EGT gas (true)", `${s.egt_gas_c.toFixed(0)} °C`],
+      ["Compressor PR / T3", `${c.pr.toFixed(2)} / ${fmtTemp(c.tt3)}`],
+      ["Turbine PR / NPR", `${c.turbine_pr.toFixed(2)} / ${c.npr.toFixed(2)}${c.choked ? " choked" : ""}`],
+      ["Jet velocity", fmtSpeed(c.v9)],
+      ["Air flow", fmtMassFlow(c.w2)],
+      ["Stall margin", `${s.surge_margin_pct.toFixed(1)} %`, s.surge_margin_pct < 6],
+      ["Thermal / propulsive", `${(c.thermal_efficiency * 100).toFixed(1)} / ${(c.propulsive_efficiency * 100).toFixed(1)} %`],
+      ["Oil quantity", `${s.oil_quantity_qt.toFixed(1)} qt`],
+      ["OAT / altitude / TAS", `${fmtTemp(s.inlet.ambient.temperature_k)} / ${fmtAlt(s.environment.altitude_m)} / ${fmtSpeed(s.inlet.true_airspeed_m_s)}`],
+      ["Windmill RPM at this Mach", `${s.windmill_n_pct.toFixed(0)} %`],
+      ["Stalls / flameouts", `${s.surge_count} / ${s.flameout_count}`, s.surge_count + s.flameout_count > 0],
+      ["Run time", `${s.run_time_s.toFixed(0)} s`],
+    ];
+  },
+  stations: (s) => {
+    const c = s.cycle;
+    return [
+      { id: "2", label: "Compressor inlet", tt_k: s.inlet.tt2_k, pt_pa: s.inlet.pt2_pa, w_kg_s: c.w2 },
+      { id: "3", label: "Compressor exit", tt_k: c.tt3, pt_pa: c.pt3, w_kg_s: c.w2 },
+      { id: "4", label: "Combustor exit / turbine inlet", tt_k: c.t4, pt_pa: c.pt4, w_kg_s: c.w2 + c.wf },
+      { id: "5", label: "Turbine exit (EGT)", tt_k: c.tt5, pt_pa: c.pt5, w_kg_s: c.w2 + c.wf },
+      { id: "7", label: "Afterburner exit", tt_k: c.tt7, pt_pa: c.pt7, w_kg_s: c.w2 + c.wf + c.wf_ab },
+      { id: "9", label: "Nozzle exit", tt_k: c.tt7, pt_pa: s.inlet.ambient.pressure_pa, w_kg_s: c.w2 + c.wf + c.wf_ab },
+    ];
+  },
+  lessons: [
+    ["turbojet-01-start.txt", "J01 Ground start"],
+    ["turbojet-02-mil-and-afterburner.txt", "J02 Military power and afterburner"],
+    ["turbojet-03-nozzle-stuck.txt", "J03 Nozzle stuck closed with A/B"],
+    ["turbojet-04-hot-start.txt", "J04 Hot start"],
+    ["turbojet-05-high-altitude-ab.txt", "J05 Supersonic dash: A/B at altitude"],
+  ],
+  defaultCharts: ["n", "egt", "thrust", "nozzle"],
+};
+
+// --------------------------------------------------------------------------
+// Turboshaft: Allison 250-C20B (Bell 206B JetRanger). Same state as the
+// turboprop: Ng is N1, Np is the rotor (Nr), pt_rpm is N2, ITT is TOT.
+// --------------------------------------------------------------------------
+const turboshaftSignals: Signal[] = [
+  sig("ng", "N1 gas producer", "%", "%", id, 0, 110, 1, (s) => s.ng_pct, [/^n1/i, /^ng/i], U_PCT),
+  sig("nr", "Nr rotor", "%", "%", id, 0, 120, 1, (s) => s.np_pct, [/^nr/i, /rotor/i], U_PCT),
+  sig("n2", "N2 power turbine", "rpm", "rpm", id, 0, 36000, 0, (s) => s.pt_rpm, [/^n2/i], U_RPM),
+  sig("tot", "TOT", "°C", "°C", id, 0, 1000, 0, (s) => (s.itt_valid ? s.itt_c : NaN), [/^tot/i, /^itt/i, /^egt/i], U_TEMP_C),
+  sig("torque", "Torque", "%", "%", id, 0, 120, 1, (s) => (s.torque_valid ? s.torque_pct : NaN), [/torque/i, /^tq/i], U_PCT),
+  sig("shp", "Shaft power", "hp", "hp", id, 0, 450, 0, (s) => s.shaft_power_hp, [/^shp/i, /power/i], U_HP),
+  sig("ff", "Fuel flow", "kg/s", "lb/h", (v) => v * 7936.64, 0, 0.04, 4, (s) => s.fuel_flow_kg_s, [/^fuel_flow/i, /^ff$/i, /fuel.?flow/i], U_FF),
+  sig("ff_cmd", "Fuel command", "kg/s", "lb/h", (v) => v * 7936.64, 0, 0.04, 4, (s) => s.fuel_command_kg_s),
+  sig("ff_max", "Accel limit", "kg/s", "lb/h", (v) => v * 7936.64, 0, 0.06, 4, (s) => s.fuel_accel_limit_kg_s),
+  sig("wf_p3", "Wf/Ps3", "", "", id, 0, 0.5, 3, (s) => s.wf_p3_ratio),
+  sig("t4", "T4 turbine inlet", "K", "K", id, 200, 1500, 0, (s) => s.t4_k),
+  sig("sm", "Surge margin", "%", "%", id, -5, 25, 1, (s) => s.surge_margin_pct),
+  sig("oilp", "Oil pressure", "psi", "psi", id, 0, 150, 0, (s) => s.oil_pressure_psi, [/oil.?press/i], U_PSI),
+  sig("oilt", "Oil temperature", "°C", "°C", id, 0, 130, 0, (s) => s.oil_temperature_c, [/oil.?temp/i], U_TEMP_C),
+  sig("collective", "Collective", "", "", id, 0, 1, 2, (s) => n(s.controls.collective)),
+  sig("rotor_power", "Rotor power absorbed", "kW", "hp", (v) => v / 0.7457, 0, 350, 0, (s) => s.prop.power_w / 1000),
+  sig("alt", "Altitude", "m", "ft", (v) => v / 0.3048, 0, 5000, 0, (s) => s.environment.altitude_m),
+  sig("opr", "Compressor PR", "", "", id, 0, 9, 2, (s) => s.cycle.pr),
+  sig("w2", "Air flow", "kg/s", "lb/s", (v) => v * 2.20462, 0, 2, 2, (s) => s.cycle.w2),
+];
+
+const turboshaft: KindDef = {
+  kind: "turboshaft",
+  title: "Turboshaft",
+  eicasTitle: "Engine instruments (JetRanger panel)",
+  primary: [
+    { label: "N1", unit: "%", min: 0, max: 110, redline: 105, decimals: 1, get: (s) => s.ng_pct },
+    { label: "TOT", unit: "°C", min: 0, max: 1000, redline: 810, amber: [738, 810], decimals: 0, get: (s) => s.itt_c, valid: (s) => s.itt_valid },
+    { label: "TORQUE", unit: "%", min: 0, max: 120, redline: 100, amber: [85, 100], green: [0, 85], decimals: 0, get: (s) => s.torque_pct, valid: (s) => s.torque_valid },
+    { label: "N2 / Nr", unit: "%", min: 0, max: 120, redline: 105, green: [97, 104], decimals: 1, bug: true, get: (s) => s.np_pct, bugOf: () => 100 },
+  ],
+  secondary: [
+    { label: "FUEL FLOW", unit: "lb/h", min: 0, max: 300, decimals: 0, get: (s) => s.fuel_flow_pph },
+    { label: "OIL PRESS", unit: "psi", min: 0, max: 150, redlineLow: 50, amber: [50, 90], green: [90, 130], decimals: 0, get: (s) => s.oil_pressure_psi },
+    { label: "OIL TEMP", unit: "°C", min: -40, max: 130, redline: 107, green: [10, 107], decimals: 0, get: (s) => s.oil_temperature_c },
+    { label: "SHP", unit: "hp", min: 0, max: 450, decimals: 0, digitalOnly: true, get: (s) => s.shaft_power_hp },
+  ],
+  controls: [
+    { type: "toggle", name: "starter", label: "STARTER", on: "ON", off: "OFF", get: (s) => b(s.controls.starter), status: (s) => (s.starter_engaged ? "MOTORING" : s.controls.starter ? "ON" : "OFF") },
+    { type: "select", name: "throttle_twist", label: "Throttle (twist grip)", options: [[0, "CUTOFF"], [1, "IDLE"], [2, "FULL (governed)"]], get: (s) => n(s.controls.condition_lever) },
+    { type: "slider", name: "collective", label: "Collective (flat pitch … full)", min: 0, max: 1, step: 0.005, scale: 100, get: (s) => n(s.controls.collective), presets: [[0, "Flat"], [0.55, "Hover"], [0.8, "Climb"], [1, "Max"]], width: 3 },
+    { type: "toggle", name: "inertial_separator", label: "PARTICLE SEP", on: "ON", off: "OFF", get: (s) => b(s.controls.inertial_separator) },
+    { type: "toggle", name: "bleed_air", label: "HEATER BLEED", on: "ON", off: "OFF", get: (s) => b(s.controls.bleed_air) },
+  ],
+  faults: [
+    { key: "starter_inop", label: "Starter-generator inoperative", kind: "bool" },
+    { key: "starter_weak", label: "Weak battery (hot start risk)", kind: "bool" },
+    { key: "starter_early_cutout", label: "Starter drops out early (hung start)", kind: "bool" },
+    { key: "ignition_fail", label: "Igniter failed", kind: "bool" },
+    { key: "start_fuel_factor", label: "Start fuel schedule × (1.7 = hot start)", kind: "num", def: 1, step: 0.1 },
+    { key: "fuel_pump_fail", label: "Fuel supply failure (flameout)", kind: "bool" },
+    { key: "oil_leak_qt_per_min", label: "Oil leak, qt/min", kind: "num", def: 0, step: 0.2 },
+    { key: "fire", label: "Engine fire", kind: "bool" },
+    { key: "prop_governor_fail", label: "N2 governor failed (Ng frozen)", kind: "bool" },
+    { key: "compressor_damage_pct", label: "Surge margin lost, % points", kind: "num", def: 0, step: 1 },
+    { key: "fod", label: "Foreign object damage", kind: "bool" },
+    { key: "itt_probe_fail", label: "TOT harness open", kind: "bool" },
+    { key: "torque_sensor_fail", label: "Torque indication failed", kind: "bool" },
+    { key: "chip_detector", label: "Chip detector light", kind: "bool" },
+    { key: "trigger_surge", label: "Surge now", kind: "bool", oneshot: true },
+    { key: "trigger_flameout", label: "Flameout now", kind: "bool", oneshot: true },
+    { key: "fire_bottle", label: "Fire bottle", kind: "bool", oneshot: true },
+  ],
+  signals: turboshaftSignals,
+  mainLever: "collective",
+  fuelControl: { name: "throttle_twist", on: 1, off: 0 },
+  runningPrep: [["throttle_twist", 2], ["starter", 0]],
+  idleLevel: 0.1, cruiseLevel: 0.6, cruiseEnv: [1500, 0.15],
+  modeOf: (s) => s.mode,
+  readouts: (s) => {
+    const c = s.cycle;
+    return [
+      ["Shaft power", `${s.shaft_power_hp.toFixed(0)} shp (${s.power_pct.toFixed(0)} %)`],
+      ["Torque", `${s.torque_pct.toFixed(0)} % · ${s.torque_nm.toFixed(0)} N·m at the mast`, s.torque_pct > 100],
+      ["Nr / N2", `${s.np_pct.toFixed(1)} % · ${s.np_rpm.toFixed(0)} rotor rpm · ${s.pt_rpm.toFixed(0)} rpm${s.governing ? " · governed" : " · freewheel"}`],
+      ["Rotor power absorbed", `${fmtPower(s.prop.power_w)} (collective ${(n(s.controls.collective) * 100).toFixed(0)} %)`],
+      ["Rotor tip Mach", s.prop.tip_mach.toFixed(2)],
+      ["Fuel flow", `${s.fuel_flow_pph.toFixed(0)} lb/h · ${fmtFuelFlow(s.fuel_flow_kg_s)}`],
+      ["Fuel: steady / demand", `${(s.fuel_flow_steady_kg_s * 7936.64).toFixed(0)} / ${(s.fuel_command_kg_s * 7936.64).toFixed(0)} lb/h`],
+      ["Fuel limits (decel / accel)", `${(s.fuel_decel_limit_kg_s * 7936.64).toFixed(0)} / ${(s.fuel_accel_limit_kg_s * 7936.64).toFixed(0)} lb/h`],
+      ["SFC", `${s.sfc_lb_shp_h.toFixed(2)} lb/shp·h`],
+      ["Fuel used", fmtMass(s.fuel_used_kg)],
+      ["N1 command / idle", `${s.ng_command_pct.toFixed(1)} / ${s.ng_idle_pct.toFixed(1)} %`],
+      ["N1 / corrected", `${s.ng_rpm.toFixed(0)} rpm / ${s.ng_corrected_pct.toFixed(1)} %`],
+      ["T4 actual / steady", `${s.t4_k.toFixed(0)} / ${s.t4_steady_k.toFixed(0)} K`, Math.abs(s.t4_k - s.t4_steady_k) > 50],
+      ["TOT gas (true)", `${s.itt_gas_c.toFixed(0)} °C`],
+      ["Compressor PR / T3", `${c.pr.toFixed(2)} / ${fmtTemp(c.tt3)}`],
+      ["Air flow", fmtMassFlow(c.w2)],
+      ["Surge margin", `${s.surge_margin_pct.toFixed(1)} %`, s.surge_margin_pct < 6],
+      ["Thermal efficiency", `${(c.thermal_efficiency * 100).toFixed(1)} %`],
+      ["Oil quantity", `${s.oil_quantity_qt.toFixed(1)} qt`],
+      ["OAT / altitude", `${fmtTemp(s.inlet.ambient.temperature_k)} / ${fmtAlt(s.environment.altitude_m)}`],
+      ["Surges / flameouts", `${s.surge_count} / ${s.flameout_count}`, s.surge_count + s.flameout_count > 0],
+      ["Run time", `${s.run_time_s.toFixed(0)} s`],
+    ];
+  },
+  stations: (s) => {
+    const c = s.cycle;
+    return [
+      { id: "2", label: "Compressor inlet", tt_k: s.inlet.tt2_k, pt_pa: s.inlet.pt2_pa, w_kg_s: c.w2 },
+      { id: "3", label: "Compressor exit", tt_k: c.tt3, pt_pa: c.pt3, w_kg_s: c.w2 },
+      { id: "4", label: "Combustor exit / gas producer turbine", tt_k: c.t4, pt_pa: c.pt4, w_kg_s: c.w2 + c.wf },
+      { id: "45", label: "Power turbine inlet (TOT)", tt_k: c.tt45, pt_pa: c.pt45, w_kg_s: c.w2 + c.wf },
+      { id: "5", label: "Power turbine exit", tt_k: c.tt5, pt_pa: c.pt5, w_kg_s: c.w2 + c.wf },
+      { id: "9", label: "Exhaust stacks", tt_k: c.tt5, pt_pa: s.inlet.ambient.pressure_pa, w_kg_s: c.w2 + c.wf },
+    ];
+  },
+  lessons: [
+    ["turboshaft-01-start.txt", "H01 Start and rotor engagement"],
+    ["turboshaft-02-hover-power.txt", "H02 Hover: collective, torque and TOT"],
+    ["turboshaft-03-hot-start.txt", "H03 Hot start on a weak battery"],
+    ["turboshaft-04-governor-failure.txt", "H04 N2 governor failure"],
+    ["turboshaft-05-flameout-autorotation.txt", "H05 Flameout and autorotation"],
+  ],
+  defaultCharts: ["ng", "nr", "torque", "tot"],
+};
+
+export const KINDS: Record<string, KindDef> = { turbofan, piston, turboprop, turbojet, turboshaft };
 
 /** Lessons written for a specific preset, listed before the family's lessons. */
 export const PRESET_LESSONS: Record<string, [string, string][]> = {
@@ -487,6 +737,39 @@ export function kindDef(kind: string, spec?: AnySpec): KindDef {
         { ...def.secondary[1], redline: l.oil_temp_max_f ?? 245, green: [140, l.oil_temp_max_f ?? 245] },
         def.secondary[2],
         { ...def.secondary[3], max: niceMax(fpMax, 2), redlineLow: fpMin, redline: fpMax, green: [fpMin, fpMax] },
+      ],
+    };
+  }
+  if (def === turbojet) {
+    const egtMax = l.egt_max_c ?? 690, egtTr = l.egt_transient_c ?? 735;
+    const opIdle = l.oil_press_min_idle_psi ?? 5, opMin = l.oil_press_min_psi ?? 25, opMax = l.oil_press_max_psi ?? 50;
+    return { ...def,
+      primary: [
+        { ...def.primary[0], redline: l.n_max_pct ?? 100.5 },
+        { ...def.primary[1], max: niceMax(egtTr, 100), redline: egtTr, amber: [egtMax, egtTr] },
+        def.primary[2], def.primary[3],
+      ],
+      secondary: [
+        { ...def.secondary[0], max: niceMax(opMax, 10), redlineLow: opIdle, amber: [opIdle, opMin], green: [opMin, opMax] },
+        { ...def.secondary[1], redline: l.oil_temp_max_c ?? 135 },
+        def.secondary[2], def.secondary[3],
+      ],
+    };
+  }
+  if (def === turboshaft) {
+    const totMax = l.itt_max_c ?? 738, totTr = l.itt_transient_c ?? 810, ngMax = l.ng_max_pct ?? 105;
+    const opIdle = l.oil_press_min_idle_psi ?? 50, opMin = l.oil_press_min_psi ?? 90, opMax = l.oil_press_max_psi ?? 130;
+    return { ...def,
+      primary: [
+        { ...def.primary[0], redline: ngMax },
+        { ...def.primary[1], max: niceMax(Math.max(totTr, l.itt_start_c ?? 927), 100), redline: totTr, amber: [totMax, totTr] },
+        def.primary[2], def.primary[3],
+      ],
+      secondary: [
+        def.secondary[0],
+        { ...def.secondary[1], max: niceMax(opMax, 10), redlineLow: opIdle, amber: [opIdle, opMin], green: [opMin, opMax] },
+        { ...def.secondary[2], redline: l.oil_temp_max_c ?? 107, green: [10, l.oil_temp_max_c ?? 107] },
+        def.secondary[3],
       ],
     };
   }

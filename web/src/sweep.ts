@@ -13,7 +13,7 @@ const VARS: VarDef[] = [
   { key: "alt", label: () => (unitSystem() === "si" ? "Altitude (m)" : "Altitude (ft)"), toSi: (v) => (unitSystem() === "si" ? v : v * FT), fromSi: (v) => (unitSystem() === "si" ? v : v / FT), def: () => (unitSystem() === "si" ? [0, 12000] : [0, 40000]), seriesDef: () => (unitSystem() === "si" ? "0, 3000, 6000, 10668" : "0, 10000, 20000, 35000"), decimals: 0 },
   { key: "mach", label: () => "Mach", toSi: (v) => v, fromSi: (v) => v, def: () => [0, 0.85], seriesDef: () => "0, 0.3, 0.6, 0.8", decimals: 2 },
   { key: "disa", label: () => "ΔISA (°C)", toSi: (v) => v, fromSi: (v) => v, def: () => [-30, 40], seriesDef: () => "-20, 0, 15, 30", decimals: 0 },
-  { key: "level", label: () => "Lever (%)", toSi: (v) => v / 100, fromSi: (v) => v * 100, def: () => [0, 100], seriesDef: () => "30, 60, 80, 100", decimals: 0 },
+  { key: "level", label: () => "Lever (%)", toSi: (v) => v / 100, fromSi: (v) => v * 100, def: () => (activeSignals().some((sg) => sg.key === "nozzle") ? [0, 130] : [0, 100]), seriesDef: () => "30, 60, 80, 100", decimals: 0 },
   { key: "n1", label: () => "N1 (%)", toSi: (v) => v, fromSi: (v) => v, def: () => [25, 100], seriesDef: () => "60, 80, 95", decimals: 0 },
 ];
 const COLORS = ["#19d3f5", "#ff4fd8", "#39d353", "#ffb300", "#f4f7fa", "#b388ff"];
@@ -39,6 +39,13 @@ const RECIPES: Recipe[] = [
   { label: "Torque vs ΔISA", x: "disa", y: "torque", from: -30, to: 40, kinds: ["turboprop"], hint: "max power lever" },
   { label: "ITT vs ΔISA", x: "disa", y: "itt", from: -30, to: 40, kinds: ["turboprop"], hint: "max power lever" },
   { label: "Fuel flow vs lever", x: "level", y: "ff", s: "alt" },
+  { label: "Thrust vs Mach", x: "mach", y: "thrust", s: "alt", sv: "0, 5000, 10000", kinds: ["turbojet"], hint: "throttle at MIL (1.0) or MAX A/B (1.3)" },
+  { label: "TSFC vs Mach (jet)", x: "mach", y: "tsfc", s: "level", sv: "80, 100, 130", kinds: ["turbojet"] },
+  { label: "Nozzle vs throttle", x: "level", y: "nozzle", from: 0, to: 130, kinds: ["turbojet"] },
+  { label: "EGT vs throttle", x: "level", y: "egt", from: 0, to: 130, s: "alt", kinds: ["turbojet"] },
+  { label: "Torque vs collective", x: "level", y: "torque", s: "alt", sv: "0, 1500, 3000", kinds: ["turboshaft"] },
+  { label: "TOT vs collective", x: "level", y: "tot", s: "disa", sv: "-20, 0, 20, 35", kinds: ["turboshaft"] },
+  { label: "Power vs ΔISA", x: "disa", y: "shp", from: -30, to: 40, kinds: ["turboshaft"], hint: "collective at hover (~0.55)" },
 ];
 
 export function initSweep(ctx: SweepContext): { rebuild: () => void } {
@@ -77,7 +84,7 @@ export function initSweep(ctx: SweepContext): { rebuild: () => void } {
   };
   const fillRecipes = (): void => {
     recipes.innerHTML = "";
-    const kind = ctx.hasN1() ? "turbofan" : activeSignals().some((sg) => sg.key === "itt") ? "turboprop" : "piston";
+    const kind = ctx.hasN1() ? "turbofan" : activeSignals().some((sg) => sg.key === "itt") ? "turboprop" : activeSignals().some((sg) => sg.key === "nozzle") ? "turbojet" : activeSignals().some((sg) => sg.key === "nr") ? "turboshaft" : "piston";
     for (const r of RECIPES) {
       if (r.kinds && !r.kinds.includes(kind)) continue;
       if (!activeSignals().some((sg) => sg.key === r.y)) continue;

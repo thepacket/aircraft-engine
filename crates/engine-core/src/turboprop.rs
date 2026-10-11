@@ -33,6 +33,31 @@ pub struct TurbopropSpec {
     pub propeller: PropSpec,
     pub gearbox: Gearbox,
     pub limits: TpLimits,
+    /// Present for a turboshaft: the power turbine drives a helicopter rotor
+    /// through the transmission instead of a propeller. The N2 governor then
+    /// holds rotor speed by trimming gas-generator speed, and the load is set
+    /// by the collective.
+    #[serde(default)]
+    pub rotor: Option<RotorSpec>,
+}
+
+/// Helicopter rotor load and N2 governor (turboshaft only).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotorSpec {
+    /// Power turbine (N2) rpm at 100 %; rotor rpm at 100 % is `rating.np_100pct_rpm`
+    pub n2_100pct_rpm: f64,
+    /// Rotor power absorbed at 100 % Nr: flat pitch and full collective (W)
+    pub power_flat_w: f64,
+    pub power_full_w: f64,
+    pub collective_exponent: f64,
+    /// N2 governor: Ng demand trim (% per % Nr error) proportional and integral (per s)
+    pub governor_p: f64,
+    pub governor_i: f64,
+    /// Rotor speed the governor holds (% of 100 %)
+    pub nr_governed_pct: f64,
+    /// Lowest rotor speed fraction at which the free turbine can deliver its
+    /// full torque (stall-torque limit during rotor engagement)
+    pub engagement_speed_frac: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,6 +260,7 @@ impl TurbopropSpec {
                 oil_press_max_psi: 105.0,
                 oil_temp_max_c: 99.0,
             },
+            rotor: None,
         }
     }
 
@@ -286,6 +312,67 @@ impl TurbopropSpec {
         s
     }
 
+    /// Rolls-Royce / Allison 250-C20B turboshaft: 420 shp, Bell 206B JetRanger.
+    ///
+    /// Published figures (FAA TCDS E4CE, Bell 206B flight manual): rating,
+    /// 100 % speeds (N1 50,970 rpm, N2 33,290 rpm, rotor 394 rpm), TOT /
+    /// torque / speed / oil limits, start sequence. The rotor load curve is
+    /// an approximation of a JetRanger at typical weight.
+    pub fn allison_250_c20b() -> Self {
+        let mut s = Self::pt6a_114a();
+        s.name = "250-C20B".into();
+        s.manufacturer = "Rolls-Royce (Allison)".into();
+        s.application = "Bell 206B JetRanger III".into();
+        s.rating = TpRating { shaft_power_w: 420.0 * HP, flat_rating_delta_isa_k: 15.0, ng_100pct_rpm: 50_970.0, np_100pct_rpm: 394.0 };
+        s.design_point.mass_flow_kg_s = 1.56;
+        s.design_point.compressor_pressure_ratio = 7.2;
+        s.design_point.eta_compressor = 0.78;
+        s.design_point.power_extraction_w = 8_000.0;
+        s.design_point.exhaust_pressure_ratio = 1.02;
+        s.control.ng_low_idle_pct = 63.0;
+        s.control.ng_high_idle_pct = 70.0;
+        s.control.governor_gain_kg_s_per_pct = 0.0003;
+        // Steady Wf/Ps3 runs ~0.13 at idle to ~0.165 at 100 % on this small engine
+        s.control.accel_wf_p3_vs_ngc = vec![[50.0, 0.20], [60.0, 0.22], [70.0, 0.24], [80.0, 0.26], [90.0, 0.27], [100.0, 0.28], [105.0, 0.28]];
+        s.control.decel_wf_p3_vs_ngc = vec![[50.0, 0.08], [70.0, 0.09], [100.0, 0.10], [105.0, 0.10]];
+        s.control.np_min_rpm = 394.0;
+        s.control.np_max_rpm = 394.0;
+        s.control.np_overspeed_rpm = 420.0;
+        s.control.ng_inertia_kg_m2 = 0.010;
+        s.control.min_fuel_kg_s = 0.004;
+        s.start.starter_max_ng_pct = 25.0;
+        s.start.min_light_ng_pct = 15.0;
+        s.start.starter_cutout_ng_pct = 58.0;
+        s.start.start_fuel_schedule = vec![[15.0, 0.0024], [20.0, 0.0030], [30.0, 0.0043], [40.0, 0.0056], [50.0, 0.0068], [60.0, 0.0078], [65.0, 0.0082]];
+        s.start.start_accel_vs_ng = vec![[15.0, 1.4], [20.0, 2.4], [25.0, 3.0], [35.0, 4.0], [45.0, 5.4], [58.0, 7.4], [63.0, 7.8], [66.0, 7.4]];
+        s.oil = TpOil { capacity_qt: 6.3, full_qt: 5.8, press_gain_psi_per_pct: 1.4, press_offset_psi: -15.0, temp_rise_idle_k: 40.0, temp_rise_takeoff_k: 65.0, temp_tau_s: 180.0, starvation_qt: 1.8, seizure_time_s: 60.0 };
+        s.gearbox = Gearbox { ratio: 33_290.0 / 394.0, efficiency: 0.97, inertia_kg_m2: 1_200.0 }; // main rotor + transmission, referred to the mast
+        s.limits = TpLimits {
+            torque_max_nm: 420.0 * HP / (394.0 * TAU / 60.0), // 100 % torque = 420 shp at 100 % Nr
+            itt_max_c: 738.0,       // TOT max continuous
+            itt_transient_c: 810.0, // takeoff, 5 min
+            itt_start_c: 927.0,     // 10 s
+            ng_max_pct: 105.0,
+            np_max_rpm: 394.0 * 1.04,
+            np_transient_rpm: 394.0 * 1.10,
+            oil_press_min_psi: 90.0,
+            oil_press_min_idle_psi: 50.0,
+            oil_press_max_psi: 130.0,
+            oil_temp_max_c: 107.0,
+        };
+        s.rotor = Some(RotorSpec {
+            n2_100pct_rpm: 33_290.0,
+            power_flat_w: 45_000.0,
+            power_full_w: 322_000.0, // full collective asks ~3 % more than the rating: 100 % torque with a little droop
+            collective_exponent: 1.6,
+            governor_p: 1.2,
+            governor_i: 1.5,
+            nr_governed_pct: 100.0,
+            engagement_speed_frac: 0.25,
+        });
+        s
+    }
+
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("spec serialises")
     }
@@ -305,11 +392,14 @@ pub struct TpControls {
     pub bleed_air: bool,
     /// Inertial separator (ice protection): small power loss
     pub inertial_separator: bool,
+    /// Turboshaft: collective pitch 0 (flat) .. 1 (full)
+    #[serde(default)]
+    pub collective: f64,
 }
 
 impl Default for TpControls {
     fn default() -> Self {
-        TpControls { power_lever: 0.0, prop_lever: 0.0, condition_lever: 0, starter: false, ignition: false, bleed_air: false, inertial_separator: false }
+        TpControls { power_lever: 0.0, prop_lever: 0.0, condition_lever: 0, starter: false, ignition: false, bleed_air: false, inertial_separator: false, collective: 0.0 }
     }
 }
 
@@ -542,6 +632,8 @@ pub struct TpState {
     pub ng_idle_pct: f64,
     pub np_rpm: f64,
     pub np_pct: f64,
+    /// Power turbine rpm (Np times the gearbox ratio); N2 on a turboshaft
+    pub pt_rpm: f64,
     pub np_target_rpm: f64,
     pub torque_nm: f64,
     pub torque_ftlb: f64,
@@ -638,6 +730,8 @@ pub struct TurbopropEngine {
     bottle_msg_timer: f64,
     governing: bool,
     prop: PropForces,
+    /// Turboshaft N2 governor: Ng demand (corrected %) from the rotor-speed loop
+    gov_ngc: f64,
     run_time_s: f64,
     seed: u64,
     idle_fuel_kg_s: f64,
@@ -715,6 +809,7 @@ impl TurbopropEngine {
             bottle_msg_timer: 0.0,
             governing: false,
             prop: PropForces::default(),
+            gov_ngc: 0.0,
             run_time_s: 0.0,
             seed: 0x5DEECE66D,
             idle_fuel_kg_s,
@@ -744,13 +839,25 @@ impl TurbopropEngine {
 
     /// Jump to a stabilised running condition at the given power lever.
     pub fn set_running(&mut self, power_lever: f64) {
-        self.controls.power_lever = power_lever.clamp(0.0, 1.0);
-        self.controls.condition_lever = self.controls.condition_lever.max(1);
+        if self.spec.rotor.is_some() {
+            // Turboshaft: the level is the collective, throttle FULL, rotor at 100 %
+            self.controls.collective = power_lever.clamp(0.0, 1.0);
+            self.controls.condition_lever = 2;
+            self.controls.power_lever = 0.0;
+        } else {
+            self.controls.power_lever = power_lever.clamp(0.0, 1.0);
+            self.controls.condition_lever = self.controls.condition_lever.max(1);
+        }
         self.controls.prop_lever = if self.controls.prop_lever < 0.1 { 1.0 } else { self.controls.prop_lever };
         self.controls.starter = false;
         self.seized = false;
         let inl = self.inlet();
         self.ng_idle = self.idle_ng_corrected() * inl.theta.sqrt();
+        if let Some(rt) = &self.spec.rotor {
+            // Start the governor near the Ng that carries this collective
+            let load = (rt.power_flat_w + (rt.power_full_w - rt.power_flat_w) * self.controls.collective.powf(rt.collective_exponent)) / self.spec.rating.shaft_power_w;
+            self.gov_ngc = (self.spec.control.ng_low_idle_pct + (100.0 - self.spec.control.ng_low_idle_pct) * load.clamp(0.0, 1.0).powf(0.6)) / inl.theta.sqrt();
+        }
         self.ng = self.ng_command_corrected(&inl) * inl.theta.sqrt();
         self.ng_cmd = self.ng;
         self.mode = TpMode::Running;
@@ -790,6 +897,9 @@ impl TurbopropEngine {
     }
 
     fn np_target(&self) -> f64 {
+        if let Some(rt) = &self.spec.rotor {
+            return self.spec.rating.np_100pct_rpm * rt.nr_governed_pct / 100.0;
+        }
         let c = &self.spec.control;
         let l = self.controls.prop_lever.clamp(0.0, 1.0);
         if l < 0.1 { c.np_min_rpm } else { c.np_min_rpm + (c.np_max_rpm - c.np_min_rpm) * ((l - 0.1) / 0.9) }
@@ -806,6 +916,10 @@ impl TurbopropEngine {
         let st = inl.theta.sqrt();
         let idle_c = self.ng_idle / st;
         let max_c = (100.0f64).min(self.spec.limits.ng_max_pct / st);
+        if self.spec.rotor.is_some() {
+            // Throttle FULL: the N2 governor sets Ng; IDLE: ground idle
+            return if self.controls.condition_lever >= 2 { self.gov_ngc.clamp(idle_c, max_c) } else { idle_c };
+        }
         let pl = self.controls.power_lever;
         if pl < 0.0 {
             // Reverse: Ng rises with reverse lever travel
@@ -946,7 +1060,23 @@ impl TurbopropEngine {
             }
             TpMode::Running => {
                 combustion = true;
-                let ngc_cmd = self.ng_command_corrected(&inl);
+                if let Some(rt) = &spec.rotor {
+                    // N2 governor (droop compensator): hold Nr by trimming the Ng demand
+                    let err = (self.np_target() - self.np) / spec.rating.np_100pct_rpm * 100.0;
+                    if c.condition_lever >= 2 && !f.prop_governor_fail {
+                        let idle_c = self.ng_idle / st;
+                        let max_c = (100.0f64).min(spec.limits.ng_max_pct / st);
+                        self.gov_ngc = (self.gov_ngc + rt.governor_i * err * h).clamp(idle_c, max_c);
+                    }
+                    let _ = rt.governor_p;
+                }
+                let mut ngc_cmd = self.ng_command_corrected(&inl);
+                if let Some(rt) = &spec.rotor {
+                    if c.condition_lever >= 2 && !f.prop_governor_fail {
+                        let err = (self.np_target() - self.np) / spec.rating.np_100pct_rpm * 100.0;
+                        ngc_cmd = (ngc_cmd + rt.governor_p * err).clamp(self.ng_idle / st, (100.0f64).min(spec.limits.ng_max_pct / st));
+                    }
+                }
                 self.ng_cmd = ngc_cmd * st;
                 // Np overspeed governor: fuel topping, proportional above max Np
                 if self.np > ctl.np_overspeed_rpm {
@@ -1010,12 +1140,41 @@ impl TurbopropEngine {
         if f.fod { r.tt45 += 15.0 }
         if self.seized { r.shaft_power_w = 0.0 }
 
-        // ---- Propeller: governor, feather, beta, dynamics ---------------------
+        // ---- Rotor (turboshaft) or propeller ----------------------------------
         let pr = &spec.propeller;
         let np_target = self.np_target();
         let feather_cmd = c.prop_lever < 0.05;
         let gb = &spec.gearbox;
         let omega_p = self.np / 60.0 * TAU;
+        if let Some(rt) = &spec.rotor {
+            let omega100 = spec.rating.np_100pct_rpm / 60.0 * TAU;
+            let coll = c.collective.clamp(0.0, 1.0);
+            let p_load = (rt.power_flat_w + (rt.power_full_w - rt.power_flat_w) * coll.powf(rt.collective_exponent)) * (self.np / spec.rating.np_100pct_rpm).max(0.0).powi(3);
+            let q_load = if omega_p > 0.5 { p_load / omega_p } else { 0.0 };
+            // Free turbine torque: full torque only once the rotor turns; stall
+            // torque limited during engagement, and the freewheel never drives the
+            // turbine from the rotor (no negative torque)
+            let omega_min = rt.engagement_speed_frac * omega100;
+            let q_pt = if r.shaft_power_w > 0.0 { r.shaft_power_w / omega_p.max(omega_min) } else { 0.0 };
+            let q_fric = 0.01 * spec.limits.torque_max_nm + 2.0 * self.np;
+            // Autorotation: in flight with the collective low, the airflow through
+            // the descending rotor drives it toward ~100 % Nr (lower collective,
+            // higher Nr) whatever the engine does; the freewheel lets the rotor
+            // outrun the power turbine. Modelled as a driving torque toward a
+            // collective-dependent speed, so a flameout with the collective
+            // lowered keeps the rotor turning. Not applied on the ground.
+            let auto_q = if inl.true_airspeed_m_s > 15.0 && coll < 0.35 && self.np > 0.3 * spec.rating.np_100pct_rpm {
+                let target = spec.rating.np_100pct_rpm * (1.02 - 0.5 * coll);
+                (0.03 * spec.limits.torque_max_nm * (target - self.np) / spec.rating.np_100pct_rpm * 100.0).max(0.0)
+            } else { 0.0 };
+            let domega = (q_pt + auto_q - q_load - q_fric) / gb.inertia_kg_m2;
+            self.np = (self.np + domega * h / TAU * 60.0).max(0.0);
+            self.torque_nm = q_pt;
+            self.shaft_power_w = r.shaft_power_w;
+            self.beta = 2.0 + 12.0 * coll; // nominal blade pitch for display
+            self.governing = c.condition_lever >= 2 && !f.prop_governor_fail;
+            self.prop = PropForces { thrust_n: 0.0, torque_nm: q_load, power_w: p_load, beta_deg: self.beta, alpha_deg: 0.0, advance_ratio: 0.0, efficiency: 0.0, tip_mach: self.np / 60.0 * TAU * 5.0 / inl.ambient.speed_of_sound_m_s, stalled: false };
+        } else {
         if feather_cmd && !f.prop_governor_fail {
             self.beta += (pr.beta_feather_deg - self.beta).clamp(-ctl.feather_rate_deg_s * h, ctl.feather_rate_deg_s * h);
             self.governing = false;
@@ -1056,6 +1215,7 @@ impl TurbopropEngine {
         }
         self.torque_nm = if omega_p > 5.0 { q_pt } else { 0.0 };
         self.shaft_power_w = r.shaft_power_w;
+        }
 
         // ---- Gas temperature at the ITT probe -------------------------------
         if combustion { self.itt_gas_k += (r.tt45 - self.itt_gas_k) / 0.3 * h }
@@ -1097,13 +1257,18 @@ impl TurbopropEngine {
             else if itt_c > l.itt_max_c { self.warnings.push(format!("ITT {:.0} C above max continuous {:.0} C", itt_c, l.itt_max_c)) }
             if self.torque_nm > l.torque_max_nm { self.warnings.push(format!("TORQUE {:.0} ft lb exceeds {:.0} ft lb", self.torque_nm / FTLB, l.torque_max_nm / FTLB)) }
             if self.ng > l.ng_max_pct { self.warnings.push(format!("Ng {:.1}% exceeds {:.1}%", self.ng, l.ng_max_pct)) }
-            if self.np > l.np_transient_rpm { self.warnings.push(format!("PROP OVERSPEED {:.0} rpm", self.np)) }
+            if spec.rotor.is_some() {
+                let nr = self.np / spec.rating.np_100pct_rpm * 100.0;
+                if self.np > l.np_transient_rpm { self.warnings.push(format!("ROTOR OVERSPEED Nr {:.0}%", nr)) }
+                else if self.np > l.np_max_rpm { self.warnings.push(format!("Nr {:.0}% above {:.0}%", nr, l.np_max_rpm / spec.rating.np_100pct_rpm * 100.0)) }
+                else if c.condition_lever >= 2 && nr < 90.0 && self.run_time_s > 20.0 { self.warnings.push(format!("LOW ROTOR RPM Nr {:.0}%: lower the collective", nr)) }
+            } else if self.np > l.np_transient_rpm { self.warnings.push(format!("PROP OVERSPEED {:.0} rpm", self.np)) }
             else if self.np > l.np_max_rpm + 20.0 { self.warnings.push(format!("Np {:.0} rpm above {:.0}", self.np, l.np_max_rpm)) }
             let min_p = if self.ng < 65.0 { l.oil_press_min_idle_psi } else { l.oil_press_min_psi };
             if self.oil_press_psi < min_p { self.warnings.push(format!("LOW OIL PRESSURE {:.0} psi (min {:.0})", self.oil_press_psi, min_p)) }
             if self.oil_temp_k - 273.15 > l.oil_temp_max_c { self.warnings.push(format!("HIGH OIL TEMPERATURE {:.0} C", self.oil_temp_k - 273.15)) }
             if self.sm < 5.0 && self.surge_timer <= 0.0 { self.warnings.push(format!("Surge margin {:.1}%", self.sm)) }
-            if f.prop_governor_fail { self.warnings.push("PROP GOVERNOR FAILED: blade angle frozen".into()) }
+            if f.prop_governor_fail { self.warnings.push(if spec.rotor.is_some() { "N2 GOVERNOR FAILED: Ng frozen, control Nr with the collective".into() } else { "PROP GOVERNOR FAILED: blade angle frozen".into() }) }
         }
         if self.oil_qty_qt < o.starvation_qt { self.warnings.push(format!("LOW OIL QUANTITY {:.1} qt", self.oil_qty_qt)) }
         if self.mode == TpMode::Starting && !self.lit && self.flameout_count > 0 { self.warnings.push("FLAMEOUT: auto-relight in progress".into()) }
@@ -1132,7 +1297,7 @@ impl TurbopropEngine {
         let mut nz = || { seed ^= seed >> 12; seed ^= seed << 25; seed ^= seed >> 27; ((seed.wrapping_mul(0x2545F4914F6CDD1D) >> 11) as f64) / ((1u64 << 53) as f64) - 0.5 };
         let vib = if self.ng > 5.0 { (0.2 + 0.6 * (self.ng / 100.0).powi(2) + if self.faults.fod { 2.0 } else { 0.0 } + if self.surge_timer > 0.0 { 1.5 } else { 0.0 } + (self.oil_starved_s / o.seizure_time_s).clamp(0.0, 1.0) * 2.0 + 0.1 * nz()).clamp(0.0, 5.0) } else { 0.0 };
         TpState {
-            kind: "turboprop".into(),
+            kind: if self.spec.rotor.is_some() { "turboshaft".into() } else { "turboprop".into() },
             time_s: self.time_s,
             mode: self.mode,
             controls: self.controls,
@@ -1146,6 +1311,7 @@ impl TurbopropEngine {
             ng_idle_pct: self.ng_idle,
             np_rpm: self.np,
             np_pct: self.np / self.spec.rating.np_100pct_rpm * 100.0,
+            pt_rpm: self.np * self.spec.gearbox.ratio,
             np_target_rpm: self.np_target(),
             torque_nm: if self.faults.torque_sensor_fail { 0.0 } else { self.torque_nm },
             torque_ftlb: if self.faults.torque_sensor_fail { 0.0 } else { self.torque_nm / FTLB },

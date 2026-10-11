@@ -1,0 +1,16 @@
+# Hot start on a weak battery: the starter only reaches ~12% N1, the fuel
+# lights with too little airflow and TOT runs past the 927 C start limit.
+# Procedure: throttle CUTOFF, keep the starter engaged to cool the turbine.
+at 0    alt 0
+at 0    fault starter_weak on
+at 0    fault start_fuel_factor 1.6
+at 0    log on
+at 0    ctl starter on
+when ng >= 12   note Throttle IDLE on a slow-cranking engine: watch TOT
+when ng >= 12   ctl throttle_twist 1
+when tot >= 927  note HOT START: throttle CUTOFF, motor to cool
+when tot >= 927  ctl throttle_twist 0
+when tot >= 927  check tot >= 927
+at 60   check tot < 600
+at 60   ctl starter off
+at 70   end

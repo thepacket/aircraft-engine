@@ -19,6 +19,7 @@ pub mod logger;
 pub mod piston;
 pub mod propeller;
 pub mod spec;
+pub mod turbojet;
 pub mod turboprop;
 
 pub use any::{AnyEngine, AnySpec, PRESETS};

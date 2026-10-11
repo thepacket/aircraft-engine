@@ -1,0 +1,17 @@
+# J85-GE-5A ground start (T-38): starter, throttle out of CUTOFF to IDLE at
+# ~14% rpm, light-off in ~2 s, EGT peak under the 760 C start limit, starter
+# drops out at 45%, idle at 48% rpm with the nozzle open.
+at 0    alt 0
+at 0    mach 0
+at 0    log on
+at 0    note Starter: rpm rising, oil pressure within 30 s of light-off
+at 0    starter on
+when n >= 14   note Throttle to IDLE: light-off, watch EGT
+when n >= 14   fuel on
+when n >= 14   watch egt < 760
+at 40   starter off
+at 60   note Idle: ~48% rpm, nozzle open, EGT ~450 C
+at 60   check n >= 46
+at 60   check n <= 51
+at 60   check nozzle >= 50
+at 70   end

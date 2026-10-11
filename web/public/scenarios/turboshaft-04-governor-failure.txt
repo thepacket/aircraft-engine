@@ -1,0 +1,16 @@
+# N2 governor failure: N1 freezes at its current value, so Nr now follows the
+# collective. Lowering the collective lets the rotor overspeed; raising it
+# droops Nr. Fly it like a fixed throttle: small, slow collective changes.
+at 0    alt 0
+at 0    running 0.5
+at 0    log on
+at 10   note Governor fails in a hover
+at 10   fault prop_governor_fail on
+at 15   note Lower the collective: Nr overspeeds
+at 15   ctl collective 0.2
+at 25   check nr >= 104
+at 28   note Raise the collective to bring Nr back
+at 28   ctl collective 0.55
+at 45   check nr >= 96
+at 45   check nr <= 104
+at 50   end

@@ -13,7 +13,7 @@ simulation core is Rust compiled to WebAssembly. It is a progressive web
 app: after the first visit it works offline and can be installed from the
 browser like a desktop or tablet app.
 
-Three engine families and eight engines, each validated against its published
+Five engine families and ten engines, each validated against its published
 data. Try it at
 https://aircraftengine.fly.dev, no install needed.
 
@@ -35,6 +35,8 @@ https://aircraftengine.fly.dev, no install needed.
 | Lycoming O-320-E2D | 4-cylinder carburetted piston, fixed-pitch prop | Cessna 172M/N Skyhawk | 150 hp |
 | Pratt & Whitney Canada PT6A-114A | free-turbine turboprop, constant-speed prop | Cessna 208B Grand Caravan | 675 shp |
 | Pratt & Whitney Canada PT6A-42 | free-turbine turboprop, constant-speed prop | Beechcraft King Air B200 | 850 shp |
+| General Electric J85-GE-5A | single-spool afterburning turbojet, variable nozzle | Northrop T-38A Talon | 2,680 lbf dry / 3,850 lbf A/B |
+| Rolls-Royce (Allison) 250-C20B | free-turbine turboshaft, N2-governed rotor | Bell 206B JetRanger | 420 shp |
 
 **What it teaches**
 
@@ -47,9 +49,9 @@ https://aircraftengine.fly.dev, no install needed.
 - Abnormals: hot, hung and wet starts, compressor surge and surge cycling,
   flameout and auto-relight, windmill restart envelope, oil leak to seizure,
   fire drill, governor failure, instrument failure; all through injectable
-  faults and 42 scripted lessons (15 turbofan, 6 piston, 6 turboprop, plus
-  two to four per newer preset, including hot starts, a surge and a
-  flameout, with checkpoints tuned to that engine).
+  faults and 52 scripted lessons (15 turbofan, 6 piston, 6 turboprop, 5
+  turbojet, 5 turboshaft, plus two to four per newer preset, including hot
+  starts, a surge and a flameout, with checkpoints tuned to that engine).
 - Assessment: `check` and `watch` lines in a lesson script set pass/fail
   criteria on any signal (EGT under the start limit, idle N1 in range, 95 %
   thrust within the FAR 33.73 time) and the IDE reports the results. Every
@@ -68,6 +70,12 @@ https://aircraftengine.fly.dev, no install needed.
 - Turboprop lessons: start, torque versus ITT limits hot and high, propeller
   governing and feather, hot start on a weak battery, reverse on the landing
   roll, flameout and relight.
+- Turbojet lessons (T-38): start, military power and afterburner with the
+  variable nozzle, a nozzle stuck closed with the afterburner lit, hot start,
+  afterburner at altitude.
+- Turboshaft lessons (JetRanger): start and rotor engagement, hover power
+  with the N2 governor holding rotor speed, hot start on a weak battery,
+  governor failure, flameout and autorotation.
 - The complete model documentation (equations, calibration, limits) is in
   [docs/MODEL.md](docs/MODEL.md) and in the IDE's Model tab.
 
@@ -81,10 +89,11 @@ aircraft-engine/
 │   │   ├── src/engine.rs       Turbofan: FADEC, spool dynamics, start/shutdown, sensors, limits
 │   │   ├── src/propeller.rs    Blade-element propeller with induced inflow (piston + turboprop)
 │   │   ├── src/piston.rs       Lycoming O-360: induction, mixture, power, temperatures, starting
-│   │   ├── src/turboprop.rs    PT6A-114A: gas generator, free power turbine, governor, start
+│   │   ├── src/turboprop.rs    PT6A-114A: gas generator, free power turbine, governor, start; rotor load for the turboshaft
+│   │   ├── src/turbojet.rs     J85-GE-5A: single spool, afterburner, variable nozzle, hydromechanical fuel control
 │   │   ├── src/any.rs          Engine-kind dispatcher (one interface for wasm and CLI)
 │   │   ├── src/logger.rs       Fixed-rate CSV data logger
-│   │   └── tests/              validation.rs (CFM56, 29), leap.rs (LEAP-1B, 6), presets.rs (V2500, PW1100G, O-320, PT6A-42, 10), piston.rs (11), turboprop.rs (12)
+│   │   └── tests/              validation.rs (CFM56, 29), leap.rs (LEAP-1B, 6), presets.rs (V2500, PW1100G, O-320, PT6A-42, 10), piston.rs (11), turboprop.rs (12), turbojet.rs (7), turboshaft.rs (5)
 │   ├── engine-wasm/      wasm-bindgen bindings (one Simulator type for all engine kinds)
 │   └── engine-cli/       Native runner: `spec [kind]`, `design`, `point`, `run <script> [--engine kind]`
 ├── web/                  TypeScript IDE (Vite). Static output in web/dist
@@ -250,7 +259,7 @@ Native tools without a browser:
 cargo run -p engine-cli -- point 100            # turbofan takeoff point, SL static
 cargo run -p engine-cli -- point 85 10668 0.78  # N1 85% at FL350 M0.78
 cargo run -p engine-cli -- point 100 --engine leap1b   # same for the LEAP-1B28 (or v2500)
-cargo run -p engine-cli -- spec piston          # default spec JSON of a preset: turbofan, leap1b, v2500, pw1100g, piston, o320, turboprop, pt6a42
+cargo run -p engine-cli -- spec piston          # default spec JSON of a preset: turbofan, leap1b, v2500, pw1100g, piston, o320, turboprop, pt6a42, turbojet, turboshaft
 cargo run -p engine-cli -- run web/public/scenarios/01-ground-start.txt > log.csv
 cargo run -p engine-cli -- run web/public/scenarios/piston-01-cold-start.txt --engine piston > log.csv
 cargo run -p engine-cli -- run web/public/scenarios/turboprop-01-start.txt --engine turboprop > log.csv
@@ -271,7 +280,10 @@ also kept in the browser's local storage.
 Each engine kind is a Rust module behind the `AnyEngine` dispatcher and a
 `KindDef` descriptor in `web/src/kinds.ts`; the engine selector lists the
 `PRESETS` table from `any.rs`, grouped by kind, and the dial limits of
-every family follow the loaded spec's limits block. Adding an engine means: a spec
+every family follow the loaded spec's limits block. The turboshaft is the
+free-turbine module with a `rotor` block in its spec (a rotor load curve
+and an N2 governor replace the propeller and its governor); its spec JSON
+carries `kind: "turboshaft"`. Adding an engine means: a spec
 struct and model in `crates/engine-core`, a variant in `any.rs`, validation
 tests, and a descriptor listing its dials, controls, faults, signals,
 readouts and lessons. The spec JSON carries a `kind` tag; a document without
@@ -290,6 +302,24 @@ and 424 lb/h, torque 1,866 ft·lb at 1,900 rpm, static thrust ~2,600 lbf;
 idle Ng 52 %, ITT ~500 °C, 136 lb/h; 10,000 ft cruise 1,390 ft·lb at 302 lb/h;
 ground start ~28 s with ITT peak ~640 °C; weak-battery hot start past 1,090 °C;
 torque limited at sea level, ITT limited hot and high.
+
+**Turbojet (J85-GE-5A, T-38A flight manual and GE data):** 2,680 lbf dry and
+3,850 lbf in afterburner by sizing (the nozzle throat for military power,
+then the reheat fuel and the open nozzle that passes it at the same turbine
+point); dry TSFC ~0.96 and ~1.9 lb/lbf/h in afterburner; military EGT
+~620 °C under the 690 °C limit; idle 48 % rpm with the nozzle open;
+start ~15 s fuel-on to idle; idle to military in ~3 s; a nozzle stuck
+closed with the afterburner lit drives the compressor into stall.
+
+**Turboshaft (250-C20B, Bell 206B flight manual):** 420 shp at 100 % N2 by
+sizing, 100 % torque defined at that point; the N2 governor holds the rotor
+at 100 % Nr (394 rpm) with a transient droop of a few percent on a quick
+collective pull; hover (~55 % collective) ~290 shp at 69 % torque and
+TOT ~680 °C; full collective ~100 % torque with TOT under the 810 °C
+takeoff limit; start ~18 s with the rotor freewheeling at ~50 % Nr at
+idle, then governed to 100 % at throttle FULL; a failed governor lets Nr
+run away with collective. The rotor is a power-absorption curve, not a
+blade-element rotor.
 
 **Turbofan (CFM56-7B26):** published figures from the FAA type certificate
 data sheet, the 737NG FCOM and CFM data are inputs: rated thrust, flat rating, fan diameter, mass flow,

@@ -1,0 +1,21 @@
+# Allison 250-C20B start and rotor engagement (Bell 206B): starter, throttle
+# to IDLE at 15% N1, light-off, TOT peak under 927 C, starter off at 58%,
+# idle N1 ~63% with the rotor freewheeling slowly. Then throttle FULL: the
+# N2 governor brings the rotor to 100% Nr at flat pitch.
+at 0    alt 0
+at 0    mach 0
+at 0    log on
+at 0    note Starter: N1 rising, throttle to IDLE at 15%
+at 0    ctl starter on
+when ng >= 15   note Throttle IDLE: light-off, watch TOT (start limit 927 C)
+when ng >= 15   ctl throttle_twist 1
+when ng >= 15   watch tot < 927
+when ng >= 58   ctl starter off
+when ng >= 58   note Idle: N1 ~63%, rotor freewheeling
+at 55   check ng >= 60
+at 55   check ng <= 67
+at 60   note Throttle FULL: rotor to 100% Nr (governed)
+at 60   ctl throttle_twist 2
+at 110  check nr >= 98
+at 110  check nr <= 102
+at 115  end

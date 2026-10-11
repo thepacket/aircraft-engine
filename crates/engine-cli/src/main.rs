@@ -133,7 +133,8 @@ fn apply(e: &mut AnyEngine, cmd: &str, val: Option<&str>, env: &mut [f64; 4]) {
         "starter" => e.set_control("starter", b(on)),
         "fuel" => match e.kind() {
             "turbofan" => e.set_control("fuel_lever", b(on)),
-            "turboprop" => e.set_control("condition_lever", b(on)),
+            "turboprop" | "turboshaft" => e.set_control("condition_lever", b(on)),
+            "turbojet" => e.set_control("fuel", b(on)),
             _ => e.set_control("mixture", b(on)),
         },
         "tla" | "throttle" | "power" => e.set_control("tla", num()),

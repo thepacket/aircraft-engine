@@ -5,6 +5,7 @@ use crate::engine::Engine;
 use crate::logger::DataLogger;
 use crate::piston::{PistonEngine, PistonSpec};
 use crate::spec::EngineSpec;
+use crate::turbojet::{TurbojetEngine, TurbojetSpec};
 use crate::turboprop::{TurbopropEngine, TurbopropSpec};
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +15,7 @@ pub enum AnySpec {
     Turbofan(EngineSpec),
     Piston(PistonSpec),
     Turboprop(TurbopropSpec),
+    Turbojet(TurbojetSpec),
 }
 
 /// Built-in engine presets: (key, kind, spec name, label).
@@ -26,6 +28,8 @@ pub const PRESETS: &[(&str, &str, &str, &str)] = &[
     ("o320", "piston", "O-320-E2D", "Lycoming O-320 piston (172)"),
     ("turboprop", "turboprop", "PT6A-114A", "PT6A-114A turboprop (Caravan)"),
     ("pt6a42", "turboprop", "PT6A-42", "PT6A-42 turboprop (King Air)"),
+    ("turbojet", "turbojet", "J85-GE-5A", "J85-GE-5A afterburning turbojet (T-38)"),
+    ("turboshaft", "turboshaft", "250-C20B", "Allison 250-C20B turboshaft (JetRanger)"),
 ];
 
 impl AnySpec {
@@ -39,6 +43,8 @@ impl AnySpec {
             "o320" => Some(AnySpec::Piston(PistonSpec::lycoming_o320())),
             "turboprop" | "pt6" | "pt6a114a" => Some(AnySpec::Turboprop(TurbopropSpec::pt6a_114a())),
             "pt6a42" => Some(AnySpec::Turboprop(TurbopropSpec::pt6a_42())),
+            "turbojet" | "j85" => Some(AnySpec::Turbojet(TurbojetSpec::j85_ge_5a())),
+            "turboshaft" | "250" | "allison250" => Some(AnySpec::Turboprop(TurbopropSpec::allison_250_c20b())),
             _ => None,
         }
     }
@@ -50,6 +56,7 @@ impl AnySpec {
             AnySpec::Turbofan(s) => s.name.as_str(),
             AnySpec::Piston(s) => s.name.as_str(),
             AnySpec::Turboprop(s) => s.name.as_str(),
+            AnySpec::Turbojet(s) => s.name.as_str(),
         };
         PRESETS.iter().find(|p| p.1 == self.kind() && p.2 == name).map(|p| p.0).unwrap_or_else(|| self.kind())
     }
@@ -63,22 +70,32 @@ impl AnySpec {
     /// Parse a spec JSON. A document without a `kind` tag is a turbofan spec
     /// (backwards compatible with the first release).
     pub fn from_json(s: &str) -> Result<Self, String> {
-        let v: serde_json::Value = serde_json::from_str(s).map_err(|e| e.to_string())?;
+        let mut v: serde_json::Value = serde_json::from_str(s).map_err(|e| e.to_string())?;
         if v.get("kind").is_none() {
             return serde_json::from_value::<EngineSpec>(v).map(AnySpec::Turbofan).map_err(|e| e.to_string());
+        }
+        // A turboshaft is the free-turbine model with a rotor load
+        if v.get("kind").and_then(|k| k.as_str()) == Some("turboshaft") {
+            v["kind"] = serde_json::Value::String("turboprop".into());
         }
         serde_json::from_value(v).map_err(|e| e.to_string())
     }
 
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).expect("spec serialises")
+        let mut v = serde_json::to_value(self).expect("spec serialises");
+        if let AnySpec::Turboprop(s) = self {
+            if s.rotor.is_some() { v["kind"] = serde_json::Value::String("turboshaft".into()); }
+        }
+        serde_json::to_string_pretty(&v).expect("spec serialises")
     }
 
     pub fn kind(&self) -> &'static str {
         match self {
             AnySpec::Turbofan(_) => "turbofan",
             AnySpec::Piston(_) => "piston",
+            AnySpec::Turboprop(s) if s.rotor.is_some() => "turboshaft",
             AnySpec::Turboprop(_) => "turboprop",
+            AnySpec::Turbojet(_) => "turbojet",
         }
     }
 }
@@ -88,6 +105,7 @@ pub enum AnyEngine {
     Turbofan(Engine),
     Piston(PistonEngine),
     Turboprop(TurbopropEngine),
+    Turbojet(TurbojetEngine),
 }
 
 impl AnyEngine {
@@ -96,6 +114,7 @@ impl AnyEngine {
             AnySpec::Turbofan(s) => AnyEngine::Turbofan(Engine::new(s)),
             AnySpec::Piston(s) => AnyEngine::Piston(PistonEngine::new(s)),
             AnySpec::Turboprop(s) => AnyEngine::Turboprop(TurbopropEngine::new(s)),
+            AnySpec::Turbojet(s) => AnyEngine::Turbojet(TurbojetEngine::new(s)),
         }
     }
 
@@ -103,7 +122,9 @@ impl AnyEngine {
         match self {
             AnyEngine::Turbofan(_) => "turbofan",
             AnyEngine::Piston(_) => "piston",
+            AnyEngine::Turboprop(e) if e.spec.rotor.is_some() => "turboshaft",
             AnyEngine::Turboprop(_) => "turboprop",
+            AnyEngine::Turbojet(_) => "turbojet",
         }
     }
 
@@ -112,6 +133,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => AnySpec::Turbofan(e.spec.clone()),
             AnyEngine::Piston(e) => AnySpec::Piston(e.spec.clone()),
             AnyEngine::Turboprop(e) => AnySpec::Turboprop(e.spec.clone()),
+            AnyEngine::Turbojet(e) => AnySpec::Turbojet(e.spec.clone()),
         }
     }
 
@@ -120,6 +142,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => serde_json::to_string(&e.sizing).unwrap_or_default(),
             AnyEngine::Piston(e) => serde_json::to_string(&serde_json::json!({ "rated_power_w": e.spec.rating.rated_power_w, "rated_rpm": e.spec.rating.rated_rpm })).unwrap_or_default(),
             AnyEngine::Turboprop(e) => serde_json::to_string(&e.sizing).unwrap_or_default(),
+            AnyEngine::Turbojet(e) => serde_json::to_string(&e.sizing).unwrap_or_default(),
         }
     }
 
@@ -128,6 +151,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => e.reset(),
             AnyEngine::Piston(e) => e.reset(),
             AnyEngine::Turboprop(e) => e.reset(),
+            AnyEngine::Turbojet(e) => e.reset(),
         }
     }
 
@@ -136,6 +160,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => e.step(dt),
             AnyEngine::Piston(e) => e.step(dt),
             AnyEngine::Turboprop(e) => e.step(dt),
+            AnyEngine::Turbojet(e) => e.step(dt),
         }
     }
 
@@ -144,6 +169,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => e.time(),
             AnyEngine::Piston(e) => e.time(),
             AnyEngine::Turboprop(e) => e.time(),
+            AnyEngine::Turbojet(e) => e.time(),
         }
     }
 
@@ -157,6 +183,7 @@ impl AnyEngine {
             }
             AnyEngine::Piston(e) => serde_json::to_string(&e.state()).unwrap_or_default(),
             AnyEngine::Turboprop(e) => serde_json::to_string(&e.state()).unwrap_or_default(),
+            AnyEngine::Turbojet(e) => serde_json::to_string(&e.state()).unwrap_or_default(),
         }
     }
 
@@ -188,6 +215,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => e.set_running(level),
             AnyEngine::Piston(e) => e.set_running(level),
             AnyEngine::Turboprop(e) => e.set_running(level),
+            AnyEngine::Turbojet(e) => e.set_running(level),
         }
     }
 
@@ -208,6 +236,11 @@ impl AnyEngine {
                 e.environment.humidity = humidity.clamp(0.0, 1.0);
             }
             AnyEngine::Turboprop(e) => {
+                e.environment.altitude_m = altitude_m;
+                e.environment.mach = mach;
+                e.environment.delta_isa_k = delta_isa_k;
+            }
+            AnyEngine::Turbojet(e) => {
                 e.environment.altitude_m = altitude_m;
                 e.environment.mach = mach;
                 e.environment.delta_isa_k = delta_isa_k;
@@ -258,7 +291,19 @@ impl AnyEngine {
                     "ignition" => c.ignition = on,
                     "bleed_air" => c.bleed_air = on,
                     "inertial_separator" => c.inertial_separator = on,
+                    "collective" => c.collective = value.clamp(0.0, 1.0),
+                    "throttle_twist" => c.condition_lever = value.clamp(0.0, 2.0).round() as u8,
                     _ => return Err(format!("unknown turboprop control {name}")),
+                }
+            }
+            AnyEngine::Turbojet(e) => {
+                let c = &mut e.controls;
+                match name {
+                    "throttle" | "tla" | "power_lever" => c.throttle = value.clamp(0.0, 1.3),
+                    "fuel" | "fuel_lever" => c.fuel = on,
+                    "starter" => c.starter = on,
+                    "anti_ice" => c.anti_ice = on,
+                    _ => return Err(format!("unknown turbojet control {name}")),
                 }
             }
         }
@@ -281,6 +326,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => { e.faults = Self::merge_json(e.faults, patch)?; }
             AnyEngine::Piston(e) => { e.faults = Self::merge_json(e.faults, patch)?; }
             AnyEngine::Turboprop(e) => { e.faults = Self::merge_json(e.faults, patch)?; }
+            AnyEngine::Turbojet(e) => { e.faults = Self::merge_json(e.faults, patch)?; }
         }
         Ok(())
     }
@@ -290,6 +336,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => e.faults = crate::engine::Faults::none(),
             AnyEngine::Piston(e) => e.faults = crate::piston::PistonFaults::none(),
             AnyEngine::Turboprop(e) => e.faults = crate::turboprop::TpFaults::none(),
+            AnyEngine::Turbojet(e) => e.faults = crate::turbojet::TjFaults::none(),
         }
     }
 
@@ -298,6 +345,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => serde_json::to_string(&e.faults).unwrap_or_default(),
             AnyEngine::Piston(e) => serde_json::to_string(&e.faults).unwrap_or_default(),
             AnyEngine::Turboprop(e) => serde_json::to_string(&e.faults).unwrap_or_default(),
+            AnyEngine::Turbojet(e) => serde_json::to_string(&e.faults).unwrap_or_default(),
         }
     }
 
@@ -306,6 +354,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => &mut e.logger,
             AnyEngine::Piston(e) => &mut e.logger,
             AnyEngine::Turboprop(e) => &mut e.logger,
+            AnyEngine::Turbojet(e) => &mut e.logger,
         }
     }
 
@@ -314,6 +363,7 @@ impl AnyEngine {
             AnyEngine::Turbofan(e) => &e.logger,
             AnyEngine::Piston(e) => &e.logger,
             AnyEngine::Turboprop(e) => &e.logger,
+            AnyEngine::Turbojet(e) => &e.logger,
         }
     }
 }

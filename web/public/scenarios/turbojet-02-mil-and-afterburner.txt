@@ -1,0 +1,22 @@
+# Military power and afterburner. Idle to MIL: the nozzle closes as the
+# throttle advances, raising EGT and thrust. Past the MIL gate the
+# afterburner lights (~1.5 s) and the nozzle opens to pass the reheated gas:
+# thrust rises ~45 % while rpm and turbine temperature do not change.
+at 0    alt 0
+at 0    mach 0
+at 0    running 0
+at 0    log on
+at 5    note Throttle to MIL
+at 5    tla 1.0
+at 5    watch egt < 735
+at 14   check thrust >= 11.3
+at 14   check nozzle <= 5
+at 20   note Throttle to MAX A/B: nozzle opens, fuel flow triples
+at 20   tla 1.3
+at 30   check thrust >= 16
+at 30   check nozzle >= 60
+at 30   check n <= 100.6
+at 40   note A/B off, back to idle
+at 40   tla 0
+at 60   check n <= 51
+at 65   end

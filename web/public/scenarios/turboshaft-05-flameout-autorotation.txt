@@ -1,0 +1,19 @@
+# Flameout in cruise: N1 winds down, the freewheel lets the rotor keep turning.
+# Lower the collective at once to keep Nr up (autorotation), then relight.
+at 0    alt 1500
+at 0    mach 0.15
+at 0    running 0.6
+at 0    log on
+at 10   note Flameout: collective DOWN to keep Nr
+at 10   fault flameout
+at 11   ctl collective 0.05
+at 11   watch nr > 85
+at 25   note Relight: starter on, throttle IDLE then FULL
+at 25   ctl starter on
+when ng >= 15   ctl throttle_twist 1
+when ng >= 58   ctl starter off
+when ng >= 58   ctl throttle_twist 2
+at 75   check ng >= 60
+at 80   ctl collective 0.5
+at 100  check nr >= 96
+at 105  end

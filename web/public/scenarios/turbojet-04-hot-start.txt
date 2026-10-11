@@ -1,0 +1,15 @@
+# Hot start: a rich start fuel schedule drives EGT past the 760 C start limit.
+# Procedure: throttle to CUTOFF, keep the starter engaged to cool the turbine.
+at 0    fault start_fuel_factor 1.9
+at 0    alt 0
+at 0    mach 0
+at 0    log on
+at 0    starter on
+when n >= 14   note Throttle IDLE: watch EGT rise toward 760 C
+when n >= 14   fuel on
+when egt >= 760  note HOT START: throttle CUTOFF, motor to cool
+when egt >= 760  fuel off
+when egt >= 760  check egt >= 760
+at 60   check egt < 600
+at 60   starter off
+at 70   end

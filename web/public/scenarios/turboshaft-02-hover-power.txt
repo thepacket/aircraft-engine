@@ -1,0 +1,21 @@
+# Hover power: with the throttle FULL the governor holds Nr at 100% while the
+# collective sets the load. Watch torque and TOT rise with the collective, the
+# transient Nr droop on a quick pull, and the 100% torque / 810 C limits.
+at 0    alt 0
+at 0    mach 0
+at 0    running 0.1
+at 0    log on
+at 5    note Collective to hover (~55%)
+at 5    ctl collective 0.55
+at 5    watch nr > 92
+at 20   check torque >= 50
+at 20   check torque <= 90
+at 20   check nr >= 98
+at 25   note Collective full: torque at the 100% limit, TOT below 810 C
+at 25   ctl collective 1.0
+at 25   watch tot < 810
+at 40   check torque >= 95
+at 45   note Lower to hover
+at 45   ctl collective 0.55
+at 60   check nr <= 104
+at 65   end
