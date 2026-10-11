@@ -332,8 +332,11 @@ impl EngineSpec {
             },
             fadec: FadecSpec {
                 idle_n1_ground_pct: 21.0,
-                // Approach idle is set high enough that a go-around reaches 95 % thrust
-                // within the 5 s of 14 CFR 33.73(b) (tests/far33_73.rs)
+                // CALIBRATED ASSUMPTION, not reference data: the flight idle N1 of
+                // every preset is set so that a go-around reaches 95 % thrust within
+                // the 5 s of 14 CFR 33.73(b) (tests/far33_73.rs), which is how the
+                // real approach idle is chosen. In this model it is also the general
+                // airborne idle (no separate approach mode), so it sets descent idle too.
                 idle_n1_flight_pct: 31.0,
                 idle_n1_per_km: 1.2,
                 idle_n1_anti_ice_pct: 4.0,

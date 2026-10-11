@@ -312,7 +312,7 @@ flow, bypass ratio, OPR, fan diameter), FAR 33.73 (acceleration time).
 | Ground idle N1 / N2 | 21 / 60 % | 21 / 60 % | by schedule |
 | Ground idle fuel / EGT | 1 357 lb/h / 454 °C | ~1 000–1 400 / 400–480 | |
 | Cruise FL350 M0.78 N1 85 % | 4 150 lbf / TSFC 0.62 | 4 000–5 500 / 0.60–0.65 | |
-| Flight idle → 95 % thrust (FAR 33.73(b)) | 4.7 s | ≤ 5 s | LEAP 4.8 s, PW1100G 4.6 s; V2500 5.9 s (EEC EGT limiting, open item). Approach idle N1 is set so this is met, as on the real engines |
+| Flight idle → 95 % thrust (FAR 33.73(b)) | 4.7 s | ≤ 5 s | LEAP 4.8 s, PW1100G 4.6 s; V2500 5.9 s (EEC EGT limiting, open item). Flight idle N1 is a calibrated assumption chosen so this is met (as the real approach idle is), not a published schedule; it also serves as the general airborne idle |
 | 15 % → 95 % thrust (the rule's fallback start) | 4.4 s | ≤ 5 s | LEAP 4.6 s, PW1100G 3.7 s; V2500 5.5 s |
 | Ground idle → 95 % thrust | 6.1 s | — | from the lower ground idle |
 | Takeoff → idle | ~10 s | 5–10 s | decel schedule |

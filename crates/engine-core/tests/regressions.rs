@@ -48,18 +48,26 @@ fn start_fuel_and_cycle_fuel_agree_in_the_turboprop_and_turbojet() {
 
 #[test]
 fn deceleration_at_altitude_does_not_flame_out() {
-    for mach in [0.3, 0.4] {
-        let mut e = Engine::new(EngineSpec::pw1127g_jm());
-        e.environment.altitude_m = 10_668.0;
-        e.environment.mach = mach;
-        e.set_running(0.5);
-        run(&mut e, 30.0);
-        e.controls.tla = 0.0;
-        run(&mut e, 120.0);
-        let s = e.state();
-        assert_eq!(s.flameout_count, 0, "PW1100G flamed out decelerating at FL350 M{mach}");
-        assert!(s.lit && s.mode == Mode::Running, "mode {:?} at M{mach}", s.mode);
-        assert!((s.n1_pct - s.n1_command_pct).abs() < 0.5, "N1 {:.2} vs command {:.2} at M{mach}", s.n1_pct, s.n1_command_pct);
+    // The defect was found with the PW1100G's original 23 % flight idle; the
+    // preset has since moved to 26 %, which on its own keeps the fuel above the
+    // old pressure-independent threshold, so both idles are run: the original
+    // one is what actually exercises the flameout criterion.
+    for idle in [23.0, EngineSpec::pw1127g_jm().fadec.idle_n1_flight_pct] {
+        for mach in [0.3, 0.4] {
+            let mut s = EngineSpec::pw1127g_jm();
+            s.fadec.idle_n1_flight_pct = idle;
+            let mut e = Engine::new(s);
+            e.environment.altitude_m = 10_668.0;
+            e.environment.mach = mach;
+            e.set_running(0.5);
+            run(&mut e, 30.0);
+            e.controls.tla = 0.0;
+            run(&mut e, 120.0);
+            let s = e.state();
+            assert_eq!(s.flameout_count, 0, "PW1100G (flight idle {idle} %) flamed out decelerating at FL350 M{mach}");
+            assert!(s.lit && s.mode == Mode::Running, "mode {:?} at M{mach}, idle {idle} %", s.mode);
+            assert!((s.n1_pct - s.n1_command_pct).abs() < 0.5, "N1 {:.2} vs command {:.2} at M{mach}, idle {idle} %", s.n1_pct, s.n1_command_pct);
+        }
     }
 }
 
