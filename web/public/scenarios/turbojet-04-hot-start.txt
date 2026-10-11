@@ -14,4 +14,6 @@ at 45   check ff < 0.001
 at 60   check egt < 600
 at 60   starter off
 at 69   check n < 30
+at 69   check starter < 0.5
+at 69   check ff < 0.001
 at 70   end

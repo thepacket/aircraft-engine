@@ -28,4 +28,7 @@ at 337  check rpm <= 1990
 at 337  check rpm >= 1850
 at 338  ctl magnetos 3
 at 345  ctl throttle 0
+at 358  note Idle, mags BOTH: as the checklist leaves it
+at 358  check rpm < 1200
+at 358  check magnetos >= 2.5
 at 360  end

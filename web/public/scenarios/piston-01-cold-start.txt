@@ -27,4 +27,8 @@ at 333  check rpm <= 2020
 at 333  check rpm >= 1900
 at 335  ctl carb_heat off
 at 345  ctl throttle 0
+at 358  note Idle, carb heat off, mags BOTH: as the checklist leaves it
+at 358  check rpm < 1200
+at 358  check carb_heat < 0.5
+at 358  check magnetos >= 2.5
 at 360  end

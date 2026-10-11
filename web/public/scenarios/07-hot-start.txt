@@ -12,4 +12,6 @@ at 55   check ff < 0.001
 at 60   check egt < 500
 at 98   check n2 < 30
 at 90   starter off
+at 99   check starter < 0.5
+at 99   check ff < 0.001
 at 100  end

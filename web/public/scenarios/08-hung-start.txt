@@ -9,5 +9,7 @@ at 55   check egt > 300
 at 55   check n2 > 20
 at 55   check n2 < 45
 at 60   fuel off
+at 62   starter off
 at 98   check ff < 0.001
+at 99   check starter < 0.5
 at 100  end

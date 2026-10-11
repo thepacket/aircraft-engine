@@ -15,4 +15,6 @@ when itt >= 1000  check itt >= 1000
 at 85   check itt < 500
 at 85   check ng < 20
 at 80   ctl starter off
+at 89   check starter < 0.5
+at 89   check ff < 0.001
 at 90   end

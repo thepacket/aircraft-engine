@@ -17,4 +17,5 @@ at 42   starter on
 at 80   starter off
 at 98   check n2 >= 90
 at 98   check thrust_pct >= 95
+at 99   check starter < 0.5
 at 100  end

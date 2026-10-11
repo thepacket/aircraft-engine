@@ -10,6 +10,7 @@ when ng >= 13   watch itt < 1090
 when ng >= 50   ctl starter off
 when ng >= 50   note Stabilised at low idle: Ng ~52%, ITT ~500 C, prop turning slowly
 at 65   check ng >= 50
+at 65   check beta < 40
 at 70   ctl condition_lever 2
 at 70   note HIGH IDLE: Ng 65%
 at 88   check ng >= 63

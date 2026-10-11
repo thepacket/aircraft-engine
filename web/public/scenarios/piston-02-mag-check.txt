@@ -37,4 +37,6 @@ when rpm >= 600 ctl starter off
 when rpm >= 600 note Running on the left magneto alone
 at 108  check firing >= 0.5
 at 108  check rpm >= 1500
+at 109  check magnetos >= 2.5
+at 109  check starter < 0.5
 at 110  end

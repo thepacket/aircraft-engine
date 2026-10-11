@@ -15,4 +15,6 @@ when tot >= 927  check tot >= 927
 at 60   check tot < 600
 at 60   check ng < 35
 at 60   ctl starter off
+at 69   check starter < 0.5
+at 69   check ff < 0.001
 at 70   end

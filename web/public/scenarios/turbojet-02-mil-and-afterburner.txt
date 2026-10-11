@@ -19,4 +19,5 @@ at 30   check n <= 100.6
 at 40   note A/B off, back to idle
 at 40   tla 0
 at 60   check n <= 51
+at 60   check ff_ab < 0.001
 at 65   end

@@ -18,4 +18,5 @@ at 40   check stalls <= 1
 at 40   check ff_ab < 0.001
 at 40   check n >= 95
 at 40   check egt < 700
+at 44   check throttle <= 1.0
 at 45   end

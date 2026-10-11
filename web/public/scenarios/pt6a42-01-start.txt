@@ -11,6 +11,7 @@ when ng >= 13   watch itt < 1000
 when ng >= 52   ctl starter off
 when ng >= 52   note Stabilised at low idle: Ng ~60%, ITT ~450 C
 at 65   check ng >= 56
+at 65   check beta < 40
 at 65   check oilp >= 60
 at 70   ctl condition_lever 2
 at 70   note HIGH IDLE: Ng 70%

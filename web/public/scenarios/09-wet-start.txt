@@ -10,4 +10,5 @@ at 38   check ff > 0.01
 at 40   fuel off
 at 70   starter off
 at 78   check ff < 0.001
+at 79   check starter < 0.5
 at 80   end

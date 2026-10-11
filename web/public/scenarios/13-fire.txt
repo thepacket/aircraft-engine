@@ -7,6 +7,8 @@ at 5    note ENGINE FIRE. Thrust lever idle
 at 8    tla 0
 at 12   note Bottle with fuel still RUN: no effect
 at 12   bottle
+# (the first discharge changes nothing with fuel still on, which is the point; only the
+#  fire still burning afterwards can be checked)
 at 18   check fire >= 0.5
 at 20   note Fuel lever CUTOFF, then bottle
 at 20   fuel off

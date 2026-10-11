@@ -18,4 +18,6 @@ at 50   check alt >= 12000
 at 50   check mach >= 0.85
 at 50   check thrust >= 3.5
 at 55   tla 1.0
+at 64   check ff_ab < 0.001
+at 64   check n >= 90
 at 65   end

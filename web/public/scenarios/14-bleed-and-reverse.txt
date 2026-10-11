@@ -14,6 +14,8 @@ at 40   antiice off
 at 40   pack off
 at 50   tla 0
 at 60   note Landing roll: reverser deploy, max reverse (N1 limited to 85%)
+at 59   check tla <= 0.01
+at 59   check n1 <= 40
 at 60   reverser on
 at 63   tla 1.0
 at 72   check rev >= 0.9
@@ -21,6 +23,9 @@ at 72   check thrust_pct <= -8
 at 72   check n1 >= 70
 at 72   check n1 <= 86
 at 75   tla 0
+at 77   check tla <= 0.01
 at 78   reverser off
 at 88   check rev < 0.1
+at 88   check tla <= 0.01
+at 88   check thrust_pct < 10
 at 90   end
