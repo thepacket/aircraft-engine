@@ -19,7 +19,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return e as T;
 };
 const esc = (s: string): string => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
-const LS = { scenario: "ae.scenario", spec: "ae.spec", units: "ae.units", engines: "ae.engines", charts: "ae.charts", kind: "ae.kind", runs: "ae.runs" };
+const LS = { scenario: "ae.scenario", spec: "ae.spec", units: "ae.units", engines: "ae.engines", charts: "ae.charts", kind: "ae.kind", runs: "ae.runs", controlsOpen: "ae.controlsOpen" };
 
 /** One graded lesson run, kept in this browser */
 interface LessonRun {
@@ -142,6 +142,14 @@ async function main(): Promise<void> {
   buildCharts();
   chartSels.forEach((s) => s.addEventListener("change", () => { savedCharts[kind.kind] = charts.map((c) => c.channel); lsSet(LS.charts, JSON.stringify(savedCharts)); }));
   $<HTMLSelectElement>("chart-window").addEventListener("change", (e) => { const w = parseFloat((e.target as HTMLSelectElement).value); charts.forEach((c) => (c.windowS = w)); });
+
+  // ---- Collapsible controls panel -------------------------------------------
+  {
+    const panel = $("controls-panel"), btn = $<HTMLButtonElement>("btn-controls-collapse"), head = panel.querySelector("h2")!;
+    const setOpen = (open: boolean): void => { panel.classList.toggle("collapsed", !open); btn.setAttribute("aria-expanded", String(open)); lsSet(LS.controlsOpen, open ? "1" : "0"); };
+    setOpen(lsGet(LS.controlsOpen) !== "0");
+    head.addEventListener("click", () => setOpen(panel.classList.contains("collapsed")));
+  }
 
   // ---- Environment --------------------------------------------------------
   const alt = $<HTMLInputElement>("alt"), mach = $<HTMLInputElement>("mach"), disa = $<HTMLInputElement>("disa"), humidity = $<HTMLInputElement>("humidity");

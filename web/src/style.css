@@ -47,6 +47,11 @@ html, body { margin: 0; height: 100%; background: var(--floor); color: var(--tex
   position: relative;
 }
 .panel.grow { flex: 1; }
+/* Collapsible panel: the header stays, everything else hides */
+.panel h2.collapsible { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+.collapse-btn { background: none; border: none; color: var(--placard); font-size: 12px; line-height: 1; padding: 0 2px; cursor: pointer; width: 14px; }
+.panel.collapsed > :not(h2) { display: none !important; } /* beats #controls { display: grid } */
+.panel.collapsed .collapse-btn { transform: rotate(-90deg); }
 .panel h2 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--placard); font-weight: 700; text-shadow: 0 1px 0 #000; }
 .panel::before, .panel::after { content: ""; position: absolute; width: 6px; height: 6px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #8b939c, #3a3f45 60%, #1a1d20); box-shadow: 0 0 0 1px #0008; top: 5px; }
 .panel::before { left: 5px; } .panel::after { right: 5px; }
