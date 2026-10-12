@@ -31,9 +31,13 @@ html, body { margin: 0; height: 100%; background: var(--floor); color: var(--tex
   grid-template-columns: 340px 1fr var(--right-w);
   grid-template-rows: auto 1fr;
   grid-template-areas: "top top top" "left center right";
+  /* 100vh on iPad Safari is the height with the toolbars hidden, so the bottom
+     of the layout went under the toolbar (or the home indicator in the
+     installed app). 100dvh follows the visible height; 100vh is the fallback. */
   height: 100vh;
+  height: 100dvh;
   gap: 12px;
-  padding: 10px;
+  padding: 10px 10px max(10px, env(safe-area-inset-bottom));
 }
 
 /* ---- hardware panels ---- */
@@ -81,7 +85,12 @@ html, body { margin: 0; height: 100%; background: var(--floor); color: var(--tex
 .mode-badge.shutdown { color: var(--red); text-shadow: 0 0 8px var(--red); }
 .sim-time { color: var(--lcd); text-shadow: 0 0 6px #ffe9b866; min-width: 110px; text-align: right; }
 
-#left { grid-area: left; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+#left { grid-area: left; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+/* On short screens (tablet landscape, 768 px) the scenario CDU used to shrink
+   until its editor was clipped; it keeps a usable height and the pedestal
+   column scrolls instead. Collapsing the Controls panel gives the room back. */
+#left > .cdu { min-height: 360px; }
+#controls-panel { flex-shrink: 0; }
 #center { grid-area: center; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
 #center .panel { flex-shrink: 0; }
 #right { grid-area: right; display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; position: relative; }
