@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Live](https://img.shields.io/badge/live-aircraftengine.fly.dev-4fc3f7.svg)](https://aircraftengine.fly.dev)
 
-![Aircraft Engine Simulator running the CFM56-7B26 at cruise in its 737 flight-deck theme: pedestal controls, the scenario CDU with the running line highlighted, 737NG-style engine indications, performance readouts and strip charts](docs/aircraft-engine.png)
+![Aircraft Engine Simulator running the CFM56-7B26 at cruise in its 737 flight-deck theme: pedestal controls, the scenario CDU with the climb-to-cruise lesson graded 6 of 6, 737NG-style engine indications, performance readouts and strip charts](docs/aircraft-engine.png)
 
 An educational IDE for aircraft engine simulation. The simulators are
 physics-based models built from the published specifications of real
@@ -284,6 +284,8 @@ on a settled copy of engine 1 (the running engines are untouched) and plots
 any signal against altitude, Mach, ISA deviation or lever position, with
 up to six values of a second variable as separate curves. Variables not
 swept stay at the current environment and lever. Results download as CSV.
+
+![The same session with the engine indications collapsed: the performance readouts, a parametric sweep of fuel flow against lever position for four altitudes, and the station-by-station cycle table with temperatures, pressures and flows from the freestream to both nozzles](docs/aircraft-engine2.png)
 
 Native tools without a browser:
 
