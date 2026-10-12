@@ -288,9 +288,9 @@ table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); 
 }
 /* Phone: a single column. The pedestal's two panels become grid items of
    their own (display: contents) so the controls come first, then the engine
-   indications and the other display units, then the CDU, then the charts. */
+   scenario CDU, then the engine indications and the other display units, then the charts. */
 @media (max-width: 699px) {
-  #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto auto; grid-template-areas: "top" "controls" "center" "cdu" "right"; height: auto; }
+  #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto auto; grid-template-areas: "top" "controls" "cdu" "center" "right"; height: auto; }
   #left { display: contents; }
   #left > .panel:first-child { grid-area: controls; }
   #left > .cdu { grid-area: cdu; }
