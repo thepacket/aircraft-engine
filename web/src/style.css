@@ -241,7 +241,8 @@ table.stats th:first-child, table.stats td:first-child { text-align: left; }
 #eicas { display: grid; grid-template-columns: repeat(var(--eicas-cols, 4), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 6px; flex: 1; min-height: 0; }
 .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px; min-height: 0; min-width: 0; position: relative; }
 .pair::before, .pair::after { position: absolute; top: 2px; font-size: 9px; font-weight: 700; letter-spacing: 1px; color: var(--accent); opacity: 0.8; }
-.pair::before { content: "ENG 1"; left: 4px; } .pair::after { content: "ENG 2"; right: 4px; }
+/* Each label at the top-left of its own dial (the pair's two columns are equal) */
+.pair::before { content: "ENG 1"; left: 4px; } .pair::after { content: "ENG 2"; left: calc(50% + 5px); }
 .dial { display: flex; justify-content: center; align-items: center; min-height: 0; min-width: 0; overflow: hidden; }
 .dial svg { width: 100%; height: 100%; max-width: 200px; }
 .twin .dial svg { max-width: 140px; }
