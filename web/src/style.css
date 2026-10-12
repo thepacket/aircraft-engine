@@ -150,7 +150,10 @@ input[type="range"]::-moz-range-thumb { width: 22px; height: 26px; border-radius
 .env-grid label { display: flex; flex-direction: column; gap: 3px; color: var(--placard); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; text-shadow: 0 1px 0 #000; }
 .env-grid input { width: 100%; }
 label.inline { display: inline-flex; gap: 4px; align-items: center; color: var(--placard); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; text-shadow: 0 1px 0 #000; }
-.target-row { display: flex; gap: 4px; align-items: center; }
+/* Two groups, "Lever target" and "Display", each on its own line in the narrow pedestal */
+.target-row { display: flex; flex-direction: column; gap: 4px; }
+.target-group { display: flex; gap: 4px; align-items: center; }
+.target-group .hint { white-space: nowrap; width: 72px; flex-shrink: 0; }
 .target-row.hidden { display: none; }
 #n1-hold-row.hidden { display: none; }
 input[type="checkbox"] { accent-color: var(--green); }

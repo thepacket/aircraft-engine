@@ -48,13 +48,17 @@
         <section class="panel" id="controls-panel">
           <h2 class="collapsible"><button class="collapse-btn" id="btn-controls-collapse" aria-expanded="true" aria-controls="controls-panel" title="Collapse or expand the controls">▾</button>Controls <span class="hint" id="target-hint"></span></h2>
           <div class="target-row hidden" id="target-row">
-            <span class="hint">Lever target</span>
-            <button class="btn small tgt active" data-target="all">BOTH</button>
-            <button class="btn small tgt" data-target="0">ENG 1</button>
-            <button class="btn small tgt" data-target="1">ENG 2</button>
-            <span class="hint" style="margin-left:auto">Display</span>
-            <button class="btn small focus active" data-focus="0">ENG 1</button>
-            <button class="btn small focus" data-focus="1">ENG 2</button>
+            <div class="target-group">
+              <span class="hint">Lever target</span>
+              <button class="btn small tgt active" data-target="all">BOTH</button>
+              <button class="btn small tgt" data-target="0">ENG 1</button>
+              <button class="btn small tgt" data-target="1">ENG 2</button>
+            </div>
+            <div class="target-group">
+              <span class="hint">Display</span>
+              <button class="btn small focus active" data-focus="0">ENG 1</button>
+              <button class="btn small focus" data-focus="1">ENG 2</button>
+            </div>
           </div>
           <div id="controls"></div>
           <div class="env-grid">
