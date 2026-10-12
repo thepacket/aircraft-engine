@@ -298,6 +298,13 @@ table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); 
   #performance { grid-area: perf; }
   #stations-panel { grid-area: stations; }
   #center > .sweep { grid-area: sweep; }
+  /* Nothing may be wider than the screen, or mobile browsers widen the layout
+     viewport to fit it and the page loads zoomed out until a pinch resets it.
+     The engine selector's intrinsic width is that of its longest option. */
+  #app { max-width: 100vw; min-width: 0; }
+  #topbar label, #topbar select, .env-grid, .env-grid label, .env-grid input { min-width: 0; max-width: 100%; }
+  #topbar label:has(#engine-kind) { flex: 1 1 100%; }
+  #engine-kind { width: 100%; }
   #splitter, #hsplitter { display: none; }
   .eicas { height: auto; }
   .eicas-sized .dial svg, .eicas-sized .twin .dial svg { max-width: 200px; }
