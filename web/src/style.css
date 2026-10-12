@@ -286,9 +286,14 @@ table.stations td:nth-child(2) { color: var(--muted); font-family: var(--sans); 
   .eicas { height: auto; }
   .eicas-sized .dial svg, .eicas-sized .twin .dial svg { max-width: 200px; }
 }
-/* Phone: a single column */
+/* Phone: a single column. The pedestal's two panels become grid items of
+   their own (display: contents) so the controls come first, then the engine
+   indications and the other display units, then the CDU, then the charts. */
 @media (max-width: 699px) {
-  #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "top" "center" "left" "right"; height: auto; }
+  #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto auto; grid-template-areas: "top" "controls" "center" "cdu" "right"; height: auto; }
+  #left { display: contents; }
+  #left > .panel:first-child { grid-area: controls; }
+  #left > .cdu { grid-area: cdu; }
   #center { overflow: visible; }
   #splitter, #hsplitter { display: none; }
   .eicas { height: auto; }
