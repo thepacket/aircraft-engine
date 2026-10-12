@@ -187,6 +187,13 @@ at 200   end</pre>
           <h2>Performance <span class="hint" id="perf-hint">(not shown in a real cockpit)</span></h2>
           <div class="readouts" id="readouts"></div>
         </section>
+        <section class="panel du" id="stations-panel">
+          <h2>Cycle stations</h2>
+          <table class="stations" id="stations">
+            <thead><tr><th>Station</th><th></th><th>Tt</th><th>Pt</th><th>W</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </section>
         <section class="panel du sweep">
           <h2>Parametric sweep <span class="hint">(steady state; variables not swept stay at the current settings)</span> <button id="sw-help-btn" class="btn small sweep-help-btn" title="How to use the sweep">?</button></h2>
           <div class="sweep-help hidden" id="sw-help">
@@ -226,13 +233,6 @@ at 200   end</pre>
           </div>
           <canvas id="sw-canvas"></canvas>
           <div class="scenario-status" id="sw-status"></div>
-        </section>
-        <section class="panel du" id="stations-panel">
-          <h2>Cycle stations</h2>
-          <table class="stations" id="stations">
-            <thead><tr><th>Station</th><th></th><th>Tt</th><th>Pt</th><th>W</th></tr></thead>
-            <tbody></tbody>
-          </table>
         </section>
       </main>
 
