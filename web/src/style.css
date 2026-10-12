@@ -128,8 +128,8 @@ select option { background: #0a0b0c; color: var(--text); }
   display: block; margin-top: 4px; font-weight: 700; color: #3b4147; letter-spacing: 1.5px; font-size: 10px; font-family: var(--sans);
   background: #0a0b0c; border-radius: 2px; padding: 2px 4px; box-shadow: inset 0 1px 3px #000; border: 1px solid #16191c;
 }
-.toggle.on { color: var(--placard); }
-.toggle.on small { color: var(--white); background: #2a2e33; text-shadow: 0 0 8px #fff, 0 0 2px #fff; box-shadow: inset 0 0 8px #ffffff33; }
+.toggle.on { color: var(--green); text-shadow: 0 0 8px #39d35388; }
+.toggle.on small { color: var(--green); background: #0e1f12; text-shadow: 0 0 8px #39d353, 0 0 2px #39d353; box-shadow: inset 0 0 8px #39d35333; border-color: #1f4a28; }
 #controls .momentary:active, .toggle:active { box-shadow: inset 0 0 0 1px #4a5058, inset 0 3px 8px #000; }
 .toggle.small { padding: 5px; font-size: 10px; }
 .toggle.small small { font-size: 9px; }
